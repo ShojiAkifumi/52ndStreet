@@ -112,6 +112,8 @@
      ・タイトル（.h1 / .h2 / .jz-intro__title）：画面に入ると一文字ずつ浮かび上がる
      ・その他のパーツ：画面に入ると下からフェードイン（並んでいるものは少しずつ時間差）
      head の小さなスクリプトが <html> に .anim を付けたときだけ動く（動きを減らす設定では付かない） */
+  // 「ようこそ」「ちょっと気取った、」の写真：前の段より早めに始め（0.7秒前）、ゆっくり（1.35秒＝ほかの1.5倍）、0.25秒ずつ1枚ずつ
+  const PHOTO_STEP = { early: 700, dur: 1350, stagger: 0.25 };
   const REVEAL = {
     titles: 'main .h1, main .h2, main .jz-intro__title',
     // 下からフェードインさせるパーツ（外側のものが選ばれていれば、その中のパーツは個別には動かさない）
@@ -131,9 +133,12 @@
     // 順番に出すセクション：{ セクション: [1番目, 2番目, …] }。各段は、前の段（表示中のもの）が出終わる少し前（overlap）から始まる。
     // 前の段が画面に入っていない（スマホで下にある等）ときは待たない
     order: {
-      '#welcome': ['.h2, .eyebrow, .rule', '.lead', '.btn-row', '.welcome__photo'], // タイトル → 文章 → ボタン → 写真
-      // { sel, together: true } の段は、時間差なしで全部同時に出す
-      '#concept': ['.h2, .eyebrow, .rule', '.lead', '.link-arrow', { sel: '.concept-photos img', together: true }], // タイトル → 文章 → リンク → 写真（3枚同時）
+      // 段は文字列（セレクタ）か { sel, … }：
+      //   early … 前の段が出終わるこの時間（ms）前から始める（省略時 overlap）
+      //   dur   … フェードインにかかる時間（ms、省略時 partDur）
+      //   stagger … 並んだものの時間差（秒、省略時 stagger）。together: true なら全部同時
+      '#welcome': ['.h2, .eyebrow, .rule', '.lead', '.btn-row', { sel: '.welcome__photo', ...PHOTO_STEP }], // タイトル → 文章 → ボタン → 写真
+      '#concept': ['.h2, .eyebrow, .rule', '.lead', '.link-arrow', { sel: '.concept-photos img', ...PHOTO_STEP }], // タイトル → 文章 → リンク → 写真（3枚を1枚ずつ）
     },
     overlap: 300, // 次の段を、前の段が出終わるこの時間（ms）前から始める
     waitMax: 3000, // 前の段が画面に入らないときに待つ上限（ms）
@@ -198,12 +203,14 @@
       const sec = document.querySelector(secSel);
       if (!sec) return;
       steps.forEach((entry, step) => {
-        const { sel, together } = typeof entry === 'string' ? { sel: entry } : entry;
+        const { sel, together, early, dur, stagger } = typeof entry === 'string' ? { sel: entry } : entry;
         [...sec.querySelectorAll(sel)].filter((el) => targets.includes(el)).forEach((el, k) => {
-          stepOf.set(el, { sec, step });
-          if ((step > 0 || together) && el.hasAttribute('data-reveal')) {
-            el.style.setProperty('--rd', `${together ? 0 : Math.min(k * REVEAL.stagger, REVEAL.staggerMax).toFixed(2)}s`);
+          stepOf.set(el, { sec, step, overlap: early ?? REVEAL.overlap });
+          if ((step > 0 || together || stagger != null) && el.hasAttribute('data-reveal')) {
+            const gap = together ? 0 : Math.min(k * (stagger ?? REVEAL.stagger), REVEAL.staggerMax);
+            el.style.setProperty('--rd', `${gap.toFixed(2)}s`);
           }
+          if (dur && el.hasAttribute('data-reveal')) el.style.setProperty('--rdur', `${dur}ms`); // フェードインの時間（CSS）
         });
       });
     });
@@ -218,7 +225,8 @@
           const ci = chars.length ? parseFloat(chars[chars.length - 1].style.getPropertyValue('--ci')) || 0 : 0;
           return now + ci + REVEAL.charDur;
         }
-        return now + (parseFloat(el.style.getPropertyValue('--rd')) || 0) * 1000 + REVEAL.partDur;
+        const dur = parseFloat(el.style.getPropertyValue('--rdur')) || REVEAL.partDur;
+        return now + (parseFloat(el.style.getPropertyValue('--rd')) || 0) * 1000 + dur;
       };
       const reveal = (el) => {
         el.classList.add('is-inview');
@@ -231,19 +239,20 @@
             el.removeAttribute('data-reveal');
             el.classList.remove('is-inview');
             el.style.removeProperty('--rd');
+            el.style.removeProperty('--rdur');
           };
           el.addEventListener('transitionend', done);
         }
       };
       // 順番に出すパーツ：同じセクションの前の段（表示中・表示予定のもの）が出終わる少し前まで待つ（もう出ていれば、すぐ）
       const revealInOrder = (el) => {
-        const { sec, step } = stepOf.get(el);
+        const { sec, step, overlap } = stepOf.get(el);
         const now = performance.now();
         let until = now;
         stepOf.forEach((s, t) => {
           if (s.sec !== sec || s.step >= step) return;
           const end = endsAt.get(t);
-          if (end && end - REVEAL.overlap > until) until = end - REVEAL.overlap;
+          if (end && end - overlap > until) until = end - overlap; // この段の early（省略時 overlap）だけ早めに始める
         });
         endsAt.set(el, finishTime(el, until)); // 待っている間も「いつ出終わるか」を次の段が使えるように
         if (until <= now) reveal(el);
@@ -307,6 +316,7 @@
           if (el.hasAttribute('data-reveal')) {
             el.removeAttribute('data-reveal'); // 画面外なのでアニメーションなしで本来の状態へ
             el.style.removeProperty('--rd');
+            el.style.removeProperty('--rdur');
             el.classList.remove('is-inview');
           }
           return false;
