@@ -513,11 +513,23 @@
   const openBtn = document.querySelector('.menu-toggle');
   const closeBtn = drawer && drawer.querySelector('.menu-close');
   if (drawer && openBtn && closeBtn) {
+    // 右からスライドして開く（CSS .drawer.is-open）。閉じるときはスライドし終えてから hidden に戻す
+    let hideTimer = 0;
     const setOpen = (open) => {
-      drawer.hidden = !open;
+      clearTimeout(hideTimer);
       openBtn.setAttribute('aria-expanded', String(open));
       document.body.classList.toggle('is-drawer-open', open);
-      (open ? closeBtn : openBtn).focus();
+      if (open) {
+        drawer.hidden = false;
+        void drawer.offsetWidth; // 画面の右外の位置を確定させてから動かす
+        drawer.classList.add('is-open');
+        closeBtn.focus({ preventScroll: true });
+      } else {
+        drawer.classList.remove('is-open');
+        const ms = reduceMotion.matches ? 0 : parseFloat(getComputedStyle(drawer).transitionDuration) * 1000 || 0;
+        hideTimer = setTimeout(() => { drawer.hidden = true; }, ms);
+        openBtn.focus({ preventScroll: true });
+      }
     };
     openBtn.addEventListener('click', () => setOpen(true));
     closeBtn.addEventListener('click', () => setOpen(false));
@@ -554,6 +566,7 @@
        端まで来たら次のスワイプで前後のセクションへ移る。
      ・移動中と、その直後に続く慣性のホイールは無視して、1回で2つ以上進まないようにする。
      ・タッチ操作が主の端末（スマホ・タブレット）では使わず、CSSの「近くで止めたら吸い付く」スナップのまま。 */
+  const spWidth = window.matchMedia('(max-width: 900px)'); // スマホの幅（スナップ・セクション送りなし）
   const PAGE = { duration: 850, gap: 220, edge: 2, slack: 160 }; // 移動の時間(ms)・新しい操作とみなす間隔(ms)・端の許容差(px)
   // slack：見えている高さよりこの分(px)までの超過は「画面に収まる」とみなす（はみ出すのは下の余白程度のため）
   if (document.body.classList.contains('page-top') && !window.matchMedia('(pointer: coarse)').matches) {
@@ -641,6 +654,7 @@
     window.addEventListener('wheel', (e) => {
       if (e.ctrlKey || Math.abs(e.deltaY) < Math.abs(e.deltaX) || e.deltaY === 0) return; // ズーム・横スクロールはそのまま
       if (loaderActive() || rootEl.classList.contains('loader-out')) { e.preventDefault(); return; } // ローディング画面のあいだ（消えていく途中も）はセクション送りしない
+      if (spWidth.matches) return; // スマホの幅ではセクション送りしない（普通のスクロール）
       const now = performance.now();
       const gap = now - lastWheel;
       lastWheel = now;
@@ -655,7 +669,7 @@
     }, { passive: false });
 
     window.addEventListener('keydown', (e) => {
-      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || spWidth.matches) return;
       if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable], button, dialog')) return;
       const down = e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey);
       const up = e.key === 'PageUp' || (e.key === ' ' && e.shiftKey);

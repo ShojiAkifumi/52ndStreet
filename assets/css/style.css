@@ -338,6 +338,10 @@ button.chip, button.chip-fill { min-height: 36px; cursor: pointer; }
   display: flex; flex-direction: column; gap: 24px;
 }
 .drawer[hidden] { display: none; }
+/* 開閉：右からゆっくりスライド（main.js が開くときに .is-open を付け、閉じるときは外してスライドし終えてから隠す） */
+.drawer { transform: translateX(100%); transition: transform .6s cubic-bezier(.22, .7, .2, 1); }
+.drawer.is-open { transform: none; }
+@media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
 .drawer__head { display: flex; justify-content: space-between; align-items: center; }
 .drawer__head img { height: 48px; width: auto; }
 .menu-close { display: flex; }
@@ -1026,6 +1030,8 @@ html:has(body.page-top) {
   .page-top .hero { scroll-margin-top: 0; }
   /* スマホは下の固定ナビの分だけ下端の余白をとる */
   html:has(body.page-top) { scroll-padding-bottom: 60px; }
+  /* スマホはスナップしない（指のスクロールのまま止まる） */
+  html:has(body.page-top) { scroll-snap-type: none; }
 }
 /* JSで1セクションずつ移る（main.js「TOP：1回のスクロールで次のセクションへ」）ときはCSSのスナップを止める。
    タッチ操作が主の端末ではJSを使わず、上の proximity スナップのまま */
