@@ -136,6 +136,7 @@
       '#concept': ['.h2, .eyebrow, .rule', '.lead', '.link-arrow', { sel: '.concept-photos img', together: true }], // タイトル → 文章 → リンク → 写真（3枚同時）
     },
     overlap: 300, // 次の段を、前の段が出終わるこの時間（ms）前から始める
+    waitMax: 3000, // 前の段が画面に入らないときに待つ上限（ms）
     charDur: 700, // タイトルの一文字が出るのにかかる時間（ms、CSS の .char と合わせる）
     partDur: 900, // パーツのフェードインにかかる時間（ms、CSS の [data-reveal] と合わせる）
     charStep: 45, // 一文字ごとの時間差（ms）
@@ -248,6 +249,32 @@
         if (until <= now) reveal(el);
         else setTimeout(() => reveal(el), until - now);
       };
+      // 前の段がまだ始まっていないうちは待たせる（ホイールで移るとスクロールの途中で写真が先に画面に入るため）。
+      // 前の段が「始まった」「画面より上へ通り過ぎた」「表示されていない（スマホで非表示など）」なら進める。
+      // 文字が画面に入らないまま止まったときのため、waitMax たったら出す
+      const waiting = new Map(); // 待っているパーツ → 待ち始めた時刻
+      let waitTimer = 0;
+      const prevStarted = (el) => {
+        const { sec, step } = stepOf.get(el);
+        for (const [t, s] of stepOf) {
+          if (s.sec !== sec || s.step >= step || endsAt.has(t)) continue;
+          if (!t.getClientRects().length || t.getBoundingClientRect().bottom <= 0) continue;
+          return false;
+        }
+        return true;
+      };
+      const tryWaiting = () => {
+        waiting.forEach((since, el) => {
+          if (prevStarted(el) || performance.now() - since > REVEAL.waitMax) { waiting.delete(el); revealInOrder(el); }
+        });
+        if (waiting.size && !waitTimer) waitTimer = setTimeout(() => { waitTimer = 0; tryWaiting(); }, 200);
+      };
+      // waitMax は「スクロールが止まってから」数える（セクション送りの途中や、前のセクションを見ている間は数えない）
+      window.addEventListener('scroll', () => {
+        if (!waiting.size) return;
+        const now = performance.now();
+        waiting.forEach((_, el) => waiting.set(el, now));
+      }, { passive: true });
       const io = new IntersectionObserver((entries) => {
         const seen = [];
         entries.forEach((en) => {
@@ -260,7 +287,11 @@
         });
         // 同時に画面に入ったものは、段の順に処理する（前の段の出終わる時刻が先に決まるように）
         const stepNum = (el) => (stepOf.has(el) ? stepOf.get(el).step : 0);
-        seen.sort((a, b) => stepNum(a) - stepNum(b)).forEach((el) => (stepNum(el) > 0 ? revealInOrder(el) : reveal(el)));
+        seen.sort((a, b) => stepNum(a) - stepNum(b)).forEach((el) => {
+          if (stepNum(el) === 0) reveal(el);
+          else waiting.set(el, performance.now());
+        });
+        tryWaiting();
       }, { rootMargin: '0px 0px -8% 0px', threshold: 0 }); // 少しでも画面に入ったら（背の高い要素でも必ず出るように）
       targets.forEach((el) => io.observe(el));
       // 速いスクロールで画面を素通りした要素も、通り過ぎた時点で出しておく（戻ったときに隠れていないように）
