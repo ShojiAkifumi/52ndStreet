@@ -1195,7 +1195,7 @@ html.loader-out .loader { opacity: 0; visibility: hidden; pointer-events: none; 
 /* 夜空：写真や青い背景のセクションでは星だけ（星雲・天の川は出さない） */
 .night-sky--plain::before { display: none; }
 
-/* ヘッダーのボタン（チケット・入会申込）もメニューと同じくゆっくり色が変わる */
+/* ヘッダーのボタン（チケット・入会案内）もメニューと同じくゆっくり色が変わる */
 .site-header .btn { transition-duration: .5s; transition-timing-function: ease; }
 /* 中央寄せのボタン列（必要なときに .btn-row に付ける） */
 .btn-row--center { justify-content: center; }
