@@ -1224,16 +1224,16 @@
   });
 
   /* ---------- ギャラリー：スクロールに合わせて続きを読み込む ----------
-     [data-gallery] … 最初の数枚はページに書き出し済み。下の目印（.gallery-sentinel）が画面に近づいたら
+     [data-gallery] … 最初の数枚はページに書き出し済み。「もっと見る」ボタン（.gallery-more）を押したら
      data-page-size 枚ずつ追加する。写真の出どころは2通り：
        ・Google ドライブ（data-drive-key と data-drive-folder があるとき）… 共有フォルダを新しい順に
        ・それ以外 … ビルド時に作る一覧 data-gallery-src（gallery.json）
-     最後まで読み込んだら、そのまま終わり（完了の表示やボタンは出さない） */
+     「もっと見る」ボタンで pageSize 枚ずつ読み込み、最後まで出したらボタンを消す */
   const galleryEl = document.querySelector('[data-gallery]');
   if (galleryEl) {
     const pageSize = Number(galleryEl.dataset.pageSize) || 24;
     const base = galleryEl.dataset.galleryBase || '';
-    const sentinel = document.querySelector('.gallery-sentinel');
+    const moreBtn = document.querySelector('.gallery-more'); // 「もっと見る」ボタン
     const statusEl = document.querySelector('.gallery-status');
     const countEl = document.querySelector('[data-gallery-count]');
     const { driveKey, driveFolder } = galleryEl.dataset;
@@ -1242,21 +1242,36 @@
     let loading = false;
     let next; // () => Promise<{ items: [{thumb, large, alt, fallback?}], done }>
 
+    // 書き出し済みの写真の一覧（gallery.json）から続きを出す
+    let list = null;
+    const localNext = async () => {
+      if (!list) {
+        const res = await fetch(galleryEl.dataset.gallerySrc);
+        if (!res.ok) throw new Error(`gallery.json ${res.status}`);
+        list = await res.json();
+      }
+      const items = list.slice(shown, shown + pageSize).map((it) => ({
+        thumb: base + it.t, large: base + it.l, alt: it.alt,
+      }));
+      return { items, done: shown + items.length >= list.length };
+    };
     if (driveKey && driveFolder) {
-      // ドライブ：書き出し済みの写真は置き換える
+      // ドライブ：書き出し済みの写真は置き換える。一覧が取れない・空のときは、書き出し済みの写真の一覧に切り替える
       let all = null;
-      let first = true;
       next = async () => {
         if (!all) {
-          all = await listDriveImages(driveKey, driveFolder, galleryEl.dataset.drivePinned);
-          if (all.length) {
-            // 書き出し済みの写真をドライブの写真に置き換え、枚数もドライブの枚数に
-            galleryEl.replaceChildren();
-            shown = 0;
-            if (countEl) countEl.textContent = `全${all.length}枚`;
+          try {
+            all = await listDriveImages(driveKey, driveFolder, galleryEl.dataset.drivePinned);
+          } catch (e) {
+            console.warn('[gallery] drive', e);
+            all = [];
           }
+          if (!all.length) { next = localNext; return { items: [], done: false }; }
+          // 書き出し済みの写真をドライブの写真に置き換え、枚数もドライブの枚数に
+          galleryEl.replaceChildren();
+          shown = 0;
+          if (countEl) countEl.textContent = `全${all.length}枚`;
         }
-        if (first) { first = false; if (!all.length) return { items: [], done: true }; } // 空：書き出し済みのまま
         const items = all.slice(shown, shown + pageSize).map((f) => ({
           driveId: f.id, // 一覧の写真は lazyDrive で読み込む（失敗時の取り直し・仮の画像つき）
           large: driveImg(f.id, 1600),
@@ -1265,18 +1280,7 @@
         return { items, done: shown + items.length >= all.length };
       };
     } else {
-      let list = null;
-      next = async () => {
-        if (!list) {
-          const res = await fetch(galleryEl.dataset.gallerySrc);
-          if (!res.ok) throw new Error(`gallery.json ${res.status}`);
-          list = await res.json();
-        }
-        const items = list.slice(shown, shown + pageSize).map((it) => ({
-          thumb: base + it.t, large: base + it.l, alt: it.alt,
-        }));
-        return { items, done: shown + items.length >= list.length };
-      };
+      next = localNext;
     }
 
     const append = (items) => {
@@ -1315,48 +1319,36 @@
     const finish = () => {
       finished = true;
       setStatus('');
-      if (io) io.disconnect();
+      if (moreBtn) moreBtn.hidden = true; // 全部出したらボタンを消す
     };
 
     const loadMore = async () => {
       if (loading || finished) return;
       loading = true;
       setStatus('読み込み中…');
+      if (moreBtn) moreBtn.disabled = true;
       try {
         const { items, done } = await next();
         append(items);
-        if (done || !items.length) { finish(); return; }
+        if (done) { finish(); return; }
         setStatus('');
+        if (moreBtn) moreBtn.hidden = false;
       } catch (e) {
         console.warn('[gallery]', e);
         setStatus('写真を読み込めませんでした。');
-        finished = true;
+        if (moreBtn) moreBtn.hidden = false; // もう一度押せるように残す
         return;
       } finally {
         loading = false;
+        if (moreBtn) moreBtn.disabled = false;
       }
-      // 画面がまだ埋まっていない（目印が見えたまま）なら続けて読む
-      if (sentinel && sentinel.getBoundingClientRect().top < window.innerHeight + 600) loadMore();
     };
 
-    let io = null;
-    if (sentinel) {
-      if ('IntersectionObserver' in window) {
-        io = new IntersectionObserver((entries) => {
-          if (entries.some((en) => en.isIntersecting)) loadMore();
-        }, { rootMargin: '0px 0px 600px 0px' });
-        io.observe(sentinel);
-      }
-      // スクロールのたびにも目印の位置を確かめる（IntersectionObserver が使えないブラウザや、
-      // 目印が見えたままで変化がない場合でも、続きを自動で読み込めるように）
-      let sraf = 0;
-      const nearCheck = () => {
-        sraf = 0;
-        if (finished) { window.removeEventListener('scroll', onNear); return; }
-        if (sentinel.getBoundingClientRect().top < window.innerHeight + 600) loadMore();
-      };
-      const onNear = () => { if (!sraf) sraf = requestAnimationFrame(nearCheck); };
-      window.addEventListener('scroll', onNear, { passive: true });
+    // 「もっと見る」ボタンで続きを読み込む（書き出し済みの分より多くあるときだけボタンを出す）
+    if (moreBtn) {
+      moreBtn.addEventListener('click', loadMore);
+      const total = countEl ? Number((countEl.textContent.match(/\d+/) || [0])[0]) : 0;
+      if (!(driveKey && driveFolder) && total > shown) moreBtn.hidden = false;
     }
     // ドライブのときは最初の分をすぐ読み込む（書き出し済みの写真と入れ替える）
     if (driveKey && driveFolder) loadMore();
