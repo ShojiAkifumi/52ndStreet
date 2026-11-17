@@ -691,7 +691,8 @@ body.is-drawer-open { overflow: hidden; }
 .week .date { white-space: nowrap; }
 @media (max-width: 700px) {
   .week thead { display: none; }
-  .week tbody tr { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; padding: 16px 12px; }
+  .week tbody { display: grid; grid-template-columns: auto 1fr; }
+  .week tbody tr { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; gap: 4px 16px; padding: 16px 12px; }
   .week td { padding: 0; }
   .week td:first-child { grid-row: span 3; }
   .week td[data-label]::before { content: attr(data-label) "："; color: var(--c-text-3); font-size: 12px; }
