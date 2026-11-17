@@ -125,6 +125,27 @@ table { width: 100%; border-collapse: collapse; }
 .grid--300 { --min: 300px; --gap: 20px; }
 .grid--340 { --min: 340px; --gap: 24px; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* 大きい写真＋下に3枚。すき間を .grid-3 と同じ 8px にそろえる */
+.photo-set { display: flex; flex-direction: column; gap: 8px; }
+.photo-set__main { aspect-ratio: 1.6 / 1; }
+/* 店名の由来（店舗について）：SP・タブレット（1199px以下）は写真を上、文章を下の1列にし、
+   写真は横8：縦3の帯にして額縁が縦の中央に来るように切り取る（額縁の中心は写真の上から約49%） */
+@media (max-width: 1199px) {
+  #origin .split { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .media.origin-photo { aspect-ratio: 8 / 3; object-position: 50% 49%; }
+}
+/* 店舗情報（店舗について）：SPは 見出し → 表 → 写真（正方形・2行2列） → ギャラリーボタン の順 */
+@media (max-width: 900px) {
+  .split--info { display: flex; flex-direction: column; gap: 20px; }
+  .split--info > .stack { display: contents; }
+  .split--info .eyebrow { order: 1; }
+  .split--info .h2 { order: 2; }
+  .split--info > .tbl { order: 3; }
+  .split--info .photo-set { order: 4; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 16px; }
+  .split--info .photo-set .grid-3 { display: contents; }
+  .split--info .photo-set__main { aspect-ratio: 1; }
+  .split--info > .stack > .btn { order: 5; }
+}
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 
 .sec-head { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px 24px; }
@@ -195,8 +216,10 @@ table { width: 100%; border-collapse: collapse; }
   min-height: 48px; padding: 0 28px;
   font-family: inherit; font-size: 14px; letter-spacing: .08em; line-height: 1.4;
   text-decoration: none; text-align: center; cursor: pointer;
-  transition: background-color .2s, color .2s, border-color .2s;
+  transition: background-color .35s ease, color .35s ease, border-color .35s ease, scale .15s ease;
 }
+/* 押した瞬間に少し沈む（クリックの手ごたえ） */
+.btn:active, button.chip:active, button.chip-fill:active, .sns a:active, .lightbox__btn:active { scale: .97; } /* transform は位置合わせ（translateY）に使うものがあるので、拡大縮小は scale で */
 .btn-gold { background: var(--c-gold); color: var(--c-black); font-weight: 700; border: 1px solid var(--c-gold); }
 .btn-gold:hover { background: var(--c-gold-hover); border-color: var(--c-gold-hover); color: var(--c-black); }
 .btn-line { color: var(--c-gold); border: 1px solid var(--c-gold); background: transparent; }
@@ -219,6 +242,7 @@ table { width: 100%; border-collapse: collapse; }
   white-space: nowrap; text-decoration: none; font-family: inherit;
 }
 .chip { color: var(--c-gold); border: 1px solid rgba(203, 178, 124, .55); background: transparent; }
+.chip, .chip-fill { transition: background-color .35s ease, color .35s ease, border-color .35s ease, scale .15s ease; }
 a.chip:hover { color: var(--c-black); background: var(--c-gold); }
 .chip-fill { color: var(--c-black); background: var(--c-gold); border: 1px solid var(--c-gold); }
 button.chip, button.chip-fill { min-height: 36px; cursor: pointer; }
@@ -282,6 +306,46 @@ button.chip, button.chip-fill { min-height: 36px; cursor: pointer; }
   padding: 14px 0; border-bottom: 1px dotted var(--c-line-2); font-size: 14px;
 }
 
+/* モーダル（<dialog class="modal">）：開くとフェード＋少し下から。閉じるときは main.js が .is-closing を付けてから閉じる */
+.modal {
+  width: min(1040px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 48px); max-height: calc(100svh - 48px);
+  margin: auto; padding: 0; border: 1px solid rgba(203, 178, 124, .45);
+  background: var(--c-black); color: var(--c-text); overflow: hidden;
+}
+.modal[open] { display: flex; animation: modal-in .45s cubic-bezier(.22, .7, .2, 1) both; }
+.modal::backdrop { background: rgba(5, 5, 8, .78); }
+.modal[open]::backdrop { animation: lb-fade .4s ease both; }
+.modal.is-closing { animation: modal-out .3s ease both; }
+.modal.is-closing::backdrop { animation: lb-fade .3s ease reverse both; }
+@keyframes modal-in { from { opacity: 0; transform: translateY(16px); } }
+@keyframes modal-out { to { opacity: 0; transform: translateY(8px); } }
+.modal__body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 40px 40px 36px; }
+.modal__close {
+  position: absolute; top: 12px; right: 32px; z-index: 1; display: grid; place-items: center; padding: 0;
+  width: 44px; height: 44px; border: 1px solid rgba(203, 178, 124, .5); border-radius: 50%;
+  background: rgba(11, 11, 14, .85); color: var(--c-gold); cursor: pointer;
+  transition: background-color .3s ease, color .3s ease, scale .15s ease;
+}
+.modal__close:hover { background: var(--c-gold); color: var(--c-black); }
+.modal__close:active { scale: .97; }
+html.is-modal-open { overflow: hidden; } /* 開いている間は後ろのページをスクロールさせない */
+@media (max-width: 900px) {
+  .modal { width: calc(100vw - 16px); max-height: calc(100svh - 16px); }
+  .modal__body { padding: 28px 20px 24px; }
+  .modal__close { top: 8px; right: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal[open], .modal[open]::backdrop, .modal.is-closing, .modal.is-closing::backdrop { animation: none; }
+}
+
+/* ご宴会・パーティーの料金目安（メニュー・モーダルの中） */
+.party { margin-top: 0; }
+.party #party-price-title { padding-right: 48px; } /* 閉じるボタンと重ならないように */
+.party .grid { --min: 440px; } /* PCは2列（料金の行が窮屈にならないように） */
+.party .item-title .small { margin-left: 6px; font-weight: 400; }
+.party .row > span:first-child { min-width: 0; }
+.party__price { flex: none; text-align: right; white-space: nowrap; }
+
 /* ステップ */
 .steps { list-style: none; padding: 0; }
 .steps > li { display: flex; flex-direction: column; gap: 10px; }
@@ -324,6 +388,34 @@ button.chip, button.chip-fill { min-height: 36px; cursor: pointer; }
 .gnav a { color: var(--c-text); text-decoration: none; padding: 6px 0; border-bottom: 1px solid transparent; transition: color .5s ease, border-color .5s ease; } /* ホバーでゆっくり色が変わる */
 .gnav a:hover { color: var(--c-gold-hover); }
 .gnav a[aria-current="page"] { border-bottom-color: var(--c-text); }
+/* 現在のページ以外：ホバーで下線が左からゆっくり伸びる（ヘッダーのメニュー・店舗についてのタブ） */
+.gnav > a, .gnav__item > a, .tab { position: relative; }
+.gnav > a:not([aria-current])::after, .gnav__item > a:not([aria-current])::after, .tab:not([aria-current])::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: currentColor;
+  transform: scaleX(0); transform-origin: left; transition: transform .7s cubic-bezier(.22, .7, .2, 1);
+}
+.tab:not([aria-current])::after { height: 2px; bottom: -2px; } /* 現在のページの下線（下の枠線2px）と同じ太さ・位置 */
+.gnav > a:not([aria-current]):hover::after, .gnav__item.has-sub:hover > a:not([aria-current])::after,
+.gnav > a:not([aria-current]):focus-visible::after, .gnav__item > a:not([aria-current]):focus-visible::after,
+.tab:not([aria-current]):hover::after, .tab:not([aria-current]):focus-visible::after { transform: scaleX(1); }
+/* 「店舗について」：PCはホバー（キーボードはフォーカス）で下層ページのメニューが下に開く */
+.gnav__item { position: relative; display: flex; }
+.gnav__item.has-sub > a::before { content: ""; position: absolute; left: -12px; right: -12px; top: 100%; height: 18px; } /* メニューまでマウスを動かしても閉じないためのすき間うめ */
+.gnav__sub { position: absolute; top: calc(100% + 14px); left: 50%; z-index: 5; min-width: 210px; transform: translateX(-50%); pointer-events: none; visibility: hidden; transition: visibility 0s linear .45s; }
+.gnav__sub-inner {
+  display: flex; flex-direction: column; padding: 8px 0;
+  background: rgba(11, 11, 14, .97); border: 1px solid var(--c-line); box-shadow: 0 12px 28px rgba(0, 0, 0, .45);
+  clip-path: inset(0 0 100% 0); opacity: 0; transform: translateY(-6px);
+  transition: clip-path .45s cubic-bezier(.22, .7, .2, 1), opacity .35s ease, transform .45s cubic-bezier(.22, .7, .2, 1);
+}
+.gnav__item.has-sub:hover .gnav__sub, .gnav__item.has-sub:focus-within .gnav__sub { pointer-events: auto; visibility: visible; transition-delay: 0s; }
+.gnav__item.has-sub:hover .gnav__sub-inner, .gnav__item.has-sub:focus-within .gnav__sub-inner { clip-path: inset(0 0 0 0); opacity: 1; transform: none; }
+.gnav .gnav__sub a { display: block; padding: 10px 22px; border: 0; white-space: nowrap; font-size: 13px; transition: color .4s ease, background-color .4s ease; }
+.gnav .gnav__sub a:hover { color: var(--c-gold-hover); background: rgba(203, 178, 124, .08); }
+.gnav .gnav__sub a[aria-current="page"] { color: var(--c-gold); }
+@media (prefers-reduced-motion: reduce) {
+  .gnav > a::after, .gnav__item > a::after, .tab::after, .gnav__sub-inner { transition: none; }
+}
 .site-header__cta { display: flex; gap: 10px; flex: none; }
 .menu-toggle, .menu-close {
   display: none; width: 44px; height: 44px; padding: 0;
@@ -341,7 +433,7 @@ button.chip, button.chip-fill { min-height: 36px; cursor: pointer; }
 /* 開閉：右からゆっくりスライド（main.js が開くときに .is-open を付け、閉じるときは外してスライドし終えてから隠す） */
 .drawer { transform: translateX(100%); transition: transform .6s cubic-bezier(.22, .7, .2, 1); }
 .drawer.is-open { transform: none; }
-@media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .drawer { transition: none; } .btn:active, button.chip:active, button.chip-fill:active, .sns a:active, .lightbox__btn:active { scale: none; } }
 .drawer__head { display: flex; justify-content: space-between; align-items: center; }
 .drawer__head img { height: 48px; width: auto; }
 .menu-close { display: flex; }
@@ -352,6 +444,17 @@ button.chip, button.chip-fill { min-height: 36px; cursor: pointer; }
   border-bottom: 1px solid var(--c-line);
 }
 .drawer__nav a[aria-current="page"] { color: var(--c-gold); }
+/* 「店舗について」：右の「＋」で下層ページを開閉 */
+.drawer__row { display: flex; align-items: stretch; border-bottom: 1px solid var(--c-line); }
+.drawer__nav .drawer__row > a { flex: 1; border-bottom: 0; }
+.drawer__toggle { position: relative; flex: none; width: 56px; background: transparent; border: 0; color: var(--c-gold); cursor: pointer; }
+.drawer__toggle::before, .drawer__toggle::after { content: ""; position: absolute; left: 50%; top: 50%; width: 14px; height: 1px; background: currentColor; transform: translate(-50%, -50%); transition: transform .45s cubic-bezier(.22, .7, .2, 1); }
+.drawer__toggle::after { transform: translate(-50%, -50%) rotate(90deg); }
+.drawer__toggle[aria-expanded="true"]::after { transform: translate(-50%, -50%) rotate(0deg); }
+.drawer__children { display: flex; flex-direction: column; padding: 4px 0 12px 16px; border-bottom: 1px solid var(--c-line); }
+.drawer__nav .drawer__children a { min-height: 44px; font-family: inherit; font-size: 15px; color: var(--c-text-3); border-bottom: 0; }
+.drawer__nav .drawer__children a[aria-current="page"] { color: var(--c-gold); }
+.drawer__children[hidden] { display: none; }
 .drawer__cta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-right: 8px; }
 .drawer__sub { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; }
 .drawer__sub a { color: var(--c-text-3); text-decoration: none; min-height: 36px; display: inline-flex; align-items: center; }
@@ -379,11 +482,11 @@ body.is-drawer-open { overflow: hidden; }
   width: 44px; height: 44px; border-radius: 50%;
   border: 1px solid rgba(203, 178, 124, .5); color: var(--c-gold);
   display: flex; align-items: center; justify-content: center; text-decoration: none;
-  transition: background-color .2s, color .2s;
+  transition: background-color .35s ease, color .35s ease, scale .15s ease;
 }
 .sns a:hover { background: var(--c-gold); color: var(--c-black); }
 .fnav { display: grid; grid-template-columns: repeat(3, auto); gap: 12px 40px; font-size: 13px; }
-.fnav a { color: var(--c-text); text-decoration: none; }
+.fnav a { color: var(--c-text); text-decoration: none; transition: color .35s ease; }
 .fnav a:hover { color: var(--c-gold-hover); }
 .copyright { font-size: 12px; }
 
@@ -446,6 +549,7 @@ body.is-drawer-open { overflow: hidden; }
   color: var(--c-text-3); text-decoration: none; font-size: 14px;
   border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
+.tab { transition: color .5s ease; }
 .tab:hover { color: var(--c-text); }
 .tab[aria-current="page"] { color: var(--c-text); border-bottom-color: var(--c-text); }
 @media (max-width: 600px) { .tab { padding: 0 14px; font-size: 13px; } }
@@ -755,7 +859,22 @@ body.is-drawer-open { overflow: hidden; }
 .accordion summary::-webkit-details-marker { display: none; }
 .accordion summary::after { content: "＋"; color: var(--c-gold); flex: none; }
 .accordion details[open] summary::after { content: "−"; }
+.accordion details.is-closing summary::after { content: "＋"; }
+.accordion summary { transition: color .35s ease; }
+.accordion summary:hover { color: var(--c-gold-hover); }
 .accordion .small { padding-bottom: 20px; }
+/* 機材写真：PCは4列（全景を2×2）、SPは2列（全景を横いっぱい） */
+.eq-photos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.eq-photos__item { position: relative; margin: 0; overflow: hidden; aspect-ratio: 4 / 3; }
+.eq-photos__item--main { grid-column: span 2; grid-row: span 2; aspect-ratio: auto; }
+.eq-photos__item .media { height: 100%; }
+.eq-photos__item--top .media { object-position: center top; }
+.eq-photos figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 20px 12px 8px; font-size: 12px; line-height: 1.5; color: var(--c-text); background: linear-gradient(transparent, rgba(0, 0, 0, .75)); }
+@media (max-width: 700px) {
+  .eq-photos { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .eq-photos__item--main { grid-row: auto; aspect-ratio: 4 / 3; }
+  .eq-photos figcaption { font-size: 11px; padding: 16px 8px 6px; }
+}
 .eq { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 4px 32px; padding: 0 0 24px; }
 .eq div { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-bottom: 1px dotted rgba(203, 178, 124, .3); }
 .eq dt { font-size: 12px; color: var(--c-text-3); }
@@ -764,6 +883,7 @@ body.is-drawer-open { overflow: hidden; }
 /* 店舗概要：店名の由来（スマホは折りたたみ） */
 .readmore__toggle { display: none; }
 @media (max-width: 900px) {
+  .readmore.is-sliding .readmore__body { -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent); mask-image: linear-gradient(180deg, #000 55%, transparent); }
   .readmore.is-collapsed .readmore__body { max-height: 13em; overflow: hidden; -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent); mask-image: linear-gradient(180deg, #000 55%, transparent); }
   .readmore__toggle { display: inline-flex; align-self: flex-start; }
 }
@@ -933,13 +1053,17 @@ body.is-drawer-open { overflow: hidden; }
   position: absolute; z-index: 1; display: grid; place-items: center; padding: 0;
   width: 48px; height: 48px; border: 1px solid rgba(203, 178, 124, .5); border-radius: 50%;
   background: rgba(11, 11, 14, .6); color: var(--c-gold); cursor: pointer;
-  transition: background-color .3s ease, color .3s ease;
+  transition: background-color .3s ease, color .3s ease, scale .15s ease;
 }
 .lightbox__btn svg { display: block; }
 .lightbox__btn:hover { background: var(--c-gold); color: var(--c-black); }
-.lightbox__close { top: 12px; right: 12px; }
-.lightbox__prev { left: 12px; top: 50%; transform: translateY(-50%); }
-.lightbox__next { right: 12px; top: 50%; transform: translateY(-50%); }
+.lightbox__close { top: 12px; right: 6.4%; } /* 上端は main.js が写真の上端にそろえる */
+/* ドライブの写真の「読込中…」：ゆっくり明滅 */
+img.is-ph { animation: ph-pulse 1.6s ease-in-out infinite alternate; }
+@keyframes ph-pulse { from { opacity: .55; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { img.is-ph { animation: none; } }
+.lightbox__prev { left: 6.4%; top: 50%; transform: translateY(-50%); }
+.lightbox__next { right: 6.4%; top: 50%; transform: translateY(-50%); }
 @media (max-width: 900px) {
   .lightbox { padding: 56px 8px 72px; }
   .lightbox__stage { height: calc(100vh - 160px); height: calc(100svh - 160px); }
@@ -1044,10 +1168,10 @@ html.is-paged { scroll-snap-type: none !important; }
 /* ---------- 表示アニメーション（main.js「表示アニメーション」） ----------
    <html class="anim"> のときだけ有効（動きを減らす設定・JSなしでは最初から表示） */
 /* タイトル：一文字ずつ、ぼかしが取れながら浮かび上がる */
-.anim :is(main .h1, main .h2, main .jz-intro__title):not(.split-title) { opacity: 0; } /* 分割前は隠す */
+.anim:not(.anim--h1) :is(main .h1, main .h2, main .jz-intro__title):not(.split-title), .anim--h1 main .h1:not(.split-title), .anim--h1 main .page-hero .eyebrow:not(.split-title) { opacity: 0; } /* 分割前は隠す（下層ページは英字と h1 だけ） */
 .anim .split-title .char {
   opacity: 0; filter: blur(6px);
-  transition: opacity .7s cubic-bezier(.2, .7, .2, 1) var(--ci, 0ms), filter .7s cubic-bezier(.2, .7, .2, 1) var(--ci, 0ms);
+  transition: opacity var(--cdur, .7s) cubic-bezier(.2, .7, .2, 1) var(--ci, 0ms), filter var(--cdur, .7s) cubic-bezier(.2, .7, .2, 1) var(--ci, 0ms); /* --cdur：英字は速め（main.js） */
 }
 .anim .split-title.is-inview .char { opacity: 1; filter: blur(0); }
 /* その他のパーツ：下からフェードイン */

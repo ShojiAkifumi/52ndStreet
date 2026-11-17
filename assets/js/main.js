@@ -146,10 +146,25 @@
     partDur: 900, // パーツのフェードインにかかる時間（ms、CSS の [data-reveal] と合わせる）
     charStep: 45, // 一文字ごとの時間差（ms）
     charTotal: 1100, // 長いタイトルでも全体でこの時間（ms）以内に出し切る
+    // 下層ページのタイトル上の英字（eyebrow）は少し速く：一文字の時間差・一文字が出る時間（ms）
+    eyebrowStep: 30, eyebrowDur: 450,
+    titleGap: 200, // 英字のあと h1 が出始めるまでの間（ms）
     stagger: 0.08, // 並んだパーツの時間差（秒）
     staggerMax: 0.48,
   };
   const animOn = document.documentElement.classList.contains('anim');
+  // 下層ページ（.anim--h1）：ページタイトル（h1）だけ一文字ずつ。ほかのパーツは最初から表示
+  const h1Only = document.documentElement.classList.contains('anim--h1');
+  if (h1Only) {
+    REVEAL.titles = 'main .page-hero .eyebrow, main .h1';
+    REVEAL.parts = ':not(*)';
+    // 英字の最後の一文字が出始めてから titleGap（ms）後に、h1 の一文字目が出始める
+    REVEAL.order = { '.page-hero': ['.eyebrow', { sel: '.h1', early: REVEAL.eyebrowDur - REVEAL.titleGap }] };
+  }
+  // 店舗についてのタブで移るときは、次のページのタイトルを動かさない（head のスクリプトが読む）
+  document.querySelectorAll('.tabs a').forEach((a) => {
+    a.addEventListener('click', () => { try { sessionStorage.setItem('skipTitleAnim', '1'); } catch (e) { /* 保存できなければ通常どおり */ } });
+  });
   window.__revealReady = true;
   if (animOn) {
     // タイトルを一文字ずつの <span class="char"> に分ける（<br> や数字用の <span> はそのまま残す）
@@ -175,8 +190,10 @@
     titles.forEach((t) => {
       const chars = [];
       splitChars(t, chars);
-      const step = Math.min(REVEAL.charStep, REVEAL.charTotal / Math.max(1, chars.length));
+      const fast = t.classList.contains('eyebrow');
+      const step = fast ? REVEAL.eyebrowStep : Math.min(REVEAL.charStep, REVEAL.charTotal / Math.max(1, chars.length));
       chars.forEach((c, i) => c.style.setProperty('--ci', `${Math.round(i * step)}ms`));
+      if (fast) t.style.setProperty('--cdur', `${REVEAL.eyebrowDur}ms`); // CSS の .char の時間
       t.classList.add('split-title');
     });
 
@@ -223,7 +240,7 @@
         if (el.classList.contains('split-title')) {
           const chars = el.querySelectorAll('.char');
           const ci = chars.length ? parseFloat(chars[chars.length - 1].style.getPropertyValue('--ci')) || 0 : 0;
-          return now + ci + REVEAL.charDur;
+          return now + ci + (parseFloat(el.style.getPropertyValue('--cdur')) || REVEAL.charDur);
         }
         const dur = parseFloat(el.style.getPropertyValue('--rdur')) || REVEAL.partDur;
         return now + (parseFloat(el.style.getPropertyValue('--rd')) || 0) * 1000 + dur;
@@ -337,6 +354,7 @@
   const SKY = {
     density: 1 / 2200, // 星の密度（px² あたり）
     maxStars: 650,
+    edgeFade: 24, // セクションの上下端から、この距離（px）で星を消す
     dprMax: 1.5, // 高解像度画面でも描画の細かさはここまで（負担を抑える）
     periodMin: 5, // 点滅の周期（秒）
     periodMax: 13,
@@ -446,19 +464,23 @@
         // サイン波でなめらかに明滅（動きを減らす設定では一定）
         const wave = reduceMotion.matches ? 0.75 : 0.5 + 0.5 * Math.sin((t / st.p) * Math.PI * 2 + st.ph);
         const eased = wave * wave * (3 - 2 * wave);
-        ctx.globalAlpha = st.a * (st.low + (1 - st.low) * eased);
         const amp = SKY.parallaxFar + (SKY.parallaxNear - SKY.parallaxFar) * st.z;
         const y = ((((st.y + amp * k + 10) % span) + span) % span) - 10;
         const d = st.r * 8; // にじみ込みの描画サイズ
-        ctx.drawImage(sprites[st.c], st.x - d / 2, y - d / 2, d, d);
+        // セクションの上下の端では星を薄くして消す（端で切れた半円の光が境目に並ばないように）
+        const edge = Math.min(y, s.h - y);
+        const fade = (r) => Math.min(1, Math.max(0, (edge - r) / SKY.edgeFade));
+        const f0 = fade(d / 2);
+        ctx.globalAlpha = st.a * (st.low + (1 - st.low) * eased) * f0;
+        if (f0 > 0) ctx.drawImage(sprites[st.c], st.x - d / 2, y - d / 2, d, d);
         // キラッと光る輝き：周期の終わりの12%で、ふくらんで強く光って消える
         if (st.gp && !reduceMotion.matches) {
           const ph = ((t + st.go) % st.gp) / st.gp;
           if (ph > 0.88) {
             const g = Math.sin(((ph - 0.88) / 0.12) * Math.PI);
             const gd = d * (1 + 2.2 * g);
-            ctx.globalAlpha = Math.min(1, 0.95 * g);
-            ctx.drawImage(sprites[0], st.x - gd / 2, y - gd / 2, gd, gd);
+            ctx.globalAlpha = Math.min(1, 0.95 * g) * fade(gd / 2);
+            if (ctx.globalAlpha > 0) ctx.drawImage(sprites[0], st.x - gd / 2, y - gd / 2, gd, gd);
           }
         }
       }
@@ -884,23 +906,154 @@
         items.forEach((it) => {
           const match = key === 'all' || it.dataset.cat.split(' ').includes(key);
           it.hidden = !match;
-          if (match) shown++;
+          if (match) { if (shown < 12) fadeUp(it, shown * 40); shown++; } // 表示された項目を順にふわっと
         });
-        if (empty) empty.hidden = shown > 0;
+        if (empty) { empty.hidden = shown > 0; if (!empty.hidden) fadeUp(empty); }
       });
     });
   });
 
-  /* ---------- 続きを読む（スマホのみ折りたたみ） ---------- */
+  /* ---------- クリックで開閉する部分の高さアニメーション（共通） ----------
+     el の高さを from → to（px）へなめらかに変える。終わったら高さの指定を外す。 */
+  const EASE_OPEN = 'cubic-bezier(.22, .7, .2, 1)';
+  const slideHeight = (el, from, to, done) => {
+    if (reduceMotion.matches || from === to) { done && done(); return; }
+    const dur = Math.min(700, Math.max(320, Math.abs(to - from) * 0.9)); // 動く量に合わせて 0.32〜0.7秒
+    el.style.overflow = 'hidden';
+    const anim = el.animate([{ height: from + 'px' }, { height: to + 'px' }], { duration: dur, easing: EASE_OPEN });
+    anim.onfinish = () => { el.style.overflow = ''; done && done(); };
+    anim.oncancel = () => { el.style.overflow = ''; }; // 途中で逆向きに押されたときは、次の動きに任せる
+    return anim;
+  };
+  // 新しく現れた要素を、少し下からふわっと表示する
+  const fadeUp = (el, delay = 0) => {
+    if (reduceMotion.matches) return;
+    el.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }],
+      { duration: 450, delay, easing: EASE_OPEN, fill: 'backwards' });
+  };
+
+  /* ---------- 続きを読む（スマホのみ折りたたみ） ----------
+     開くとき：折りたたんだ高さ → 全文の高さへのばしてから、下のぼかしを消す
+     閉じるとき：全文の高さ → 折りたたんだ高さへ縮める。見出しが画面の上に隠れていたら、そこまで戻す */
   document.querySelectorAll('.readmore').forEach((box) => {
     const btn = box.querySelector('.readmore__toggle');
-    if (!btn) return;
+    const body = box.querySelector('.readmore__body');
+    if (!btn || !body) return;
     box.classList.add('is-collapsed');
     btn.setAttribute('aria-expanded', 'false');
+    let anim = null;
     btn.addEventListener('click', () => {
-      const collapsed = box.classList.toggle('is-collapsed');
-      btn.setAttribute('aria-expanded', String(!collapsed));
-      btn.textContent = collapsed ? '続きを読む' : '閉じる';
+      const from = body.getBoundingClientRect().height;
+      if (anim) anim.cancel();
+      const collapse = !box.classList.contains('is-collapsed');
+      btn.setAttribute('aria-expanded', String(!collapse));
+      btn.textContent = collapse ? '続きを読む' : '閉じる';
+      if (collapse) {
+        box.classList.add('is-collapsed');
+        const to = body.getBoundingClientRect().height;
+        box.classList.add('is-sliding');
+        body.style.maxHeight = 'none'; // 縮めている間は高さの上限を外す（アニメーションで高さを決める）
+        anim = slideHeight(body, from, to, () => { body.style.maxHeight = ''; box.classList.remove('is-sliding'); anim = null; });
+        const top = box.getBoundingClientRect().top;
+        const headerH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 64;
+        if (top < headerH) window.scrollBy({ top: top - headerH - 16, behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+      } else {
+        box.classList.remove('is-collapsed');
+        body.style.maxHeight = '';
+        const to = body.getBoundingClientRect().height;
+        box.classList.add('is-sliding'); // のびている間はぼかしを残す
+        anim = slideHeight(body, from, to, () => { box.classList.remove('is-sliding'); anim = null; });
+      }
+    });
+  });
+
+  /* ---------- スマホのメニュー：「店舗について」の下層ページを「＋」で開閉 ---------- */
+  document.querySelectorAll('.drawer__toggle').forEach((btn) => {
+    const panel = document.getElementById(btn.getAttribute('aria-controls'));
+    if (!panel) return;
+    // 今いるページが下層ページなら、最初から開いておく
+    if (panel.querySelector('[aria-current="page"]')) { panel.hidden = false; btn.setAttribute('aria-expanded', 'true'); }
+    let anim = null;
+    btn.addEventListener('click', () => {
+      const open = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', String(open));
+      btn.setAttribute('aria-label', btn.getAttribute('aria-label').replace(open ? '開く' : '閉じる', open ? '閉じる' : '開く'));
+      const from = panel.hidden ? 0 : panel.getBoundingClientRect().height;
+      if (anim) anim.cancel();
+      panel.hidden = false;
+      if (open) {
+        const to = panel.getBoundingClientRect().height;
+        anim = slideHeight(panel, from, to, () => { anim = null; });
+        [...panel.children].forEach((a, i) => fadeUp(a, 40 + i * 50));
+      } else {
+        anim = slideHeight(panel, from, 0, () => { panel.hidden = true; anim = null; });
+        if (!anim) panel.hidden = true; // 動きを減らす設定（アニメーションなし）
+      }
+    });
+  });
+
+  /* ---------- モーダル（<dialog class="modal">） ----------
+     [data-modal-open="ID"] で開く。閉じる：×ボタン・[data-modal-close]・Esc・外側（暗い部分）をクリック。フェードして閉じる */
+  document.querySelectorAll('[data-modal-open]').forEach((btn) => {
+    const dlg = document.getElementById(btn.dataset.modalOpen);
+    if (!dlg || typeof dlg.showModal !== 'function') return;
+    let timer = 0;
+    const close = (after) => {
+      if (!dlg.open || dlg.classList.contains('is-closing')) return;
+      const done = () => {
+        dlg.classList.remove('is-closing');
+        dlg.close();
+        document.documentElement.classList.remove('is-modal-open');
+        if (after) after();
+      };
+      if (reduceMotion.matches) { done(); return; }
+      dlg.classList.add('is-closing');
+      clearTimeout(timer);
+      timer = setTimeout(done, 300);
+    };
+    btn.addEventListener('click', () => {
+      dlg.classList.remove('is-closing');
+      document.documentElement.classList.add('is-modal-open');
+      dlg.showModal();
+      const body = dlg.querySelector('.modal__body');
+      if (body) body.scrollTop = 0;
+    });
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+    // Esc：ブラウザ標準の「すぐ閉じる」を止めてフェードで閉じる
+    dlg.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
+    dlg.addEventListener('click', (e) => {
+      if (e.target === dlg) { close(); return; } // 外側（暗い部分）
+      const c = e.target.closest('[data-modal-close]');
+      if (!c) return;
+      const href = c.getAttribute('href');
+      if (href && href.startsWith('#')) {
+        e.preventDefault(); // 閉じ終わってから、ページ内のその場所へ移動
+        close(() => requestAnimationFrame(() => { const t = document.querySelector(href); if (t) t.scrollIntoView({ behavior: reduceMotion.matches ? 'auto' : 'smooth' }); }));
+      } else close();
+    });
+  });
+
+  /* ---------- アコーディオン（details）：開閉をなめらかに ---------- */
+  document.querySelectorAll('.accordion details').forEach((det) => {
+    const sum = det.querySelector('summary');
+    if (!sum) return;
+    let anim = null;
+    sum.addEventListener('click', (e) => {
+      if (reduceMotion.matches) return; // 動きを減らす設定では標準の開閉
+      e.preventDefault();
+      const from = det.getBoundingClientRect().height;
+      if (anim) anim.cancel();
+      if (!det.open || det.classList.contains('is-closing')) {
+        det.classList.remove('is-closing');
+        det.open = true;
+        const to = det.getBoundingClientRect().height;
+        anim = slideHeight(det, from, to, () => { anim = null; });
+        [...det.children].filter((c) => c !== sum).forEach((c) => fadeUp(c, 60));
+      } else {
+        det.classList.add('is-closing'); // ＋/− の表示を先に戻す
+        const to = sum.getBoundingClientRect().height;
+        anim = slideHeight(det, from, to, () => { det.open = false; det.classList.remove('is-closing'); anim = null; });
+      }
     });
   });
 
@@ -916,6 +1069,62 @@
   // 画像URL：公開ファイルを指定幅で配信。表示できない場合はサムネイルURLに切り替える
   const driveImg = (id, w) => `https://lh3.googleusercontent.com/d/${id}=w${w}`;
   const driveThumb = (id, w) => `https://drive.google.com/thumbnail?id=${id}&sz=w${w}`;
+
+  /* ---------- ドライブの写真の読み込み（失敗したら少し待って取り直す） ----------
+     ドライブの画像は、一度にたくさん頼むと一時的に断られることがある。そこで
+     ・同時に読み込むのは DRIVE_PARALLEL 枚まで（順番待ち）
+     ・失敗したら URL を変えたり、少し待ったりして DRIVE_RETRY の順に取り直す
+     ・読み込み中は「読込中…」、最後までだめなら「画像を読み込めません」の仮の画像を出す */
+  const DRIVE_PARALLEL = 4;
+  const DRIVE_RETRY = [ // [使うURL, 待つ時間(ms)]
+    ['img', 0], ['thumb', 0], ['img', 1500], ['thumb', 3500], ['img', 7000],
+  ];
+  const placeholder = (text) => 'data:image/svg+xml,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"><rect width="400" height="400" fill="#101830"/><text x="200" y="207" fill="#CBB27C" font-size="20" font-family="sans-serif" text-anchor="middle" letter-spacing="3">${text}</text></svg>`);
+  const PH_LOADING = placeholder('読込中…');
+  const PH_FAILED = placeholder('画像を読み込めません');
+  let driveActive = 0;
+  const driveQueue = [];
+  const driveNext = () => {
+    while (driveActive < DRIVE_PARALLEL && driveQueue.length) { driveActive++; driveQueue.shift()(); }
+  };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const tryLoad = (src) => new Promise((resolve) => {
+    const p = new Image();
+    p.decoding = 'async';
+    p.onload = () => resolve(p.naturalWidth > 0);
+    p.onerror = () => resolve(false);
+    p.src = src;
+  });
+  // id の写真を幅 w で読み込み、成功した URL を返す（だめなら null）
+  const loadDrive = (id, w) => new Promise((resolve) => {
+    driveQueue.push(async () => {
+      let ok = null;
+      for (let i = 0; i < DRIVE_RETRY.length && !ok; i++) {
+        const [kind, ms] = DRIVE_RETRY[i];
+        if (ms) await wait(ms);
+        const src = kind === 'img' ? driveImg(id, w) : driveThumb(id, w) + (i > 1 ? `&r=${i}` : '');
+        if (await tryLoad(src)) ok = src;
+      }
+      driveActive--;
+      driveNext();
+      resolve(ok);
+    });
+    driveNext();
+  });
+  // <img> にドライブの写真を入れる：まず「読込中…」、画面に近づいたら読み込み（失敗時は取り直し → だめなら「画像を読み込めません」）
+  const lazyDrive = (img, id, size) => {
+    img.src = PH_LOADING;
+    img.classList.add('is-ph');
+    const start = () => loadDrive(id, size).then((src) => {
+      img.src = src || PH_FAILED;
+      img.classList.remove('is-ph'); // 失敗時の「画像を読み込めません」は明滅させない
+    });
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((en) => { if (en.some((e) => e.isIntersecting)) { io.disconnect(); start(); } }, { rootMargin: '400px 0px' });
+      io.observe(img);
+    } else start();
+  };
 
   // フォルダの写真を一覧で取得し、並べ替えて返す（1回の呼び出しで最大1000枚。それ以上は続けて取得）。
   // 並び順：① 最初に並べる写真（pinned：site.config.mjs の galleryPinned と同じ名前のファイル、その順）
@@ -970,19 +1179,17 @@
   function driveItem(file, box) {
     const size = Number(box.dataset.driveSize) || 480;
     const img = document.createElement('img');
-    img.src = driveImg(file.id, size);
+    lazyDrive(img, file.id, size);
     // 代替テキスト（listDriveImages で決めたもの）。なければ共通の文言
     img.alt = file.alt || box.dataset.driveAlt || '52番街の写真';
     img.loading = 'lazy';
     img.decoding = 'async';
     img.width = size;
     img.height = size;
-    img.addEventListener('error', () => {
-      if (!img.dataset.retried) { img.dataset.retried = '1'; img.src = driveThumb(file.id, size); }
-    });
     if (!box.hasAttribute('data-lightbox')) return img;
     const a = document.createElement('a');
     a.href = driveImg(file.id, 1600);
+    a.dataset.driveId = file.id; // 拡大表示でも失敗時に取り直せるように
     a.className = 'photo-grid__item';
     a.appendChild(img);
     return a;
@@ -1051,8 +1258,7 @@
         }
         if (first) { first = false; if (!all.length) return { items: [], done: true }; } // 空：書き出し済みのまま
         const items = all.slice(shown, shown + pageSize).map((f) => ({
-          thumb: driveImg(f.id, 600),
-          fallback: driveThumb(f.id, 600),
+          driveId: f.id, // 一覧の写真は lazyDrive で読み込む（失敗時の取り直し・仮の画像つき）
           large: driveImg(f.id, 1600),
           alt: f.alt || '52番街の写真',
         }));
@@ -1081,13 +1287,23 @@
         a.href = it.large;
         a.style.setProperty('--gd', `${Math.min(i * 40, 600)}ms`); // 少しずつ時間差で出す
         const img = document.createElement('img');
-        img.src = it.thumb;
         img.alt = it.alt;
         img.width = 600;
         img.height = 600;
-        img.loading = 'lazy';
         img.decoding = 'async';
-        if (it.fallback) img.addEventListener('error', () => { if (img.src !== it.fallback) img.src = it.fallback; }, { once: true });
+        if (it.driveId) {
+          a.dataset.driveId = it.driveId;
+          lazyDrive(img, it.driveId, 600);
+        } else {
+          // 書き出し済みの写真：失敗したら1回だけ少し待って取り直し、だめなら「画像を読み込めません」
+          img.src = it.thumb;
+          img.loading = 'lazy';
+          img.addEventListener('error', () => {
+            if (img.dataset.retry) { img.src = PH_FAILED; return; }
+            img.dataset.retry = '1';
+            setTimeout(() => { img.src = `${it.thumb}${it.thumb.includes('?') ? '&' : '?'}r=1`; }, 1500);
+          });
+        }
         a.appendChild(img);
         frag.appendChild(a);
       });
@@ -1209,6 +1425,29 @@
     let cur = 0; // 今見えている <img> の番号（0 / 1）
     let token = 0; // 速く連打されたときは最後の操作だけ反映する
     const ready = (img) => (img.decode ? img.decode() : Promise.resolve()).catch(() => {});
+    // 閉じるボタンの上端を、表示中の写真の上端にそろえる（写真は枠の中で縦横比を保って中央に置かれる）
+    const closeBtn = lightbox.querySelector('.lightbox__close');
+    const alignClose = () => {
+      const img = imgs[cur];
+      const st = img.parentElement.getBoundingClientRect();
+      const nw = img.naturalWidth, nh = img.naturalHeight;
+      if (!nw || !nh || !st.height) return;
+      const k = Math.min(st.width / nw, st.height / nh);
+      const top = st.top + (st.height - nh * k) / 2 - lightbox.getBoundingClientRect().top;
+      closeBtn.style.top = `${Math.max(8, Math.round(top))}px`;
+    };
+    window.addEventListener('resize', () => { if (lightbox.open) alignClose(); });
+    // 開くときの写真の拡大アニメーション（lb-zoom）が終わったら、もう一度そろえる
+    lightbox.addEventListener('animationend', (e) => { if (e.target.classList.contains('lightbox__stage')) alignClose(); });
+    // 写真を入れる：ドライブの写真は、失敗したら取り直し（それでもだめなら「画像を読み込めません」）
+    const setSrc = async (img, a) => {
+      if (!a.dataset.driveId) { img.src = a.href; return; }
+      img.src = a.href;
+      await ready(img);
+      if (img.naturalWidth > 0) return;
+      const src = await loadDrive(a.dataset.driveId, 1600);
+      img.src = src || PH_FAILED;
+    };
     const preload = (i) => {
       const a = list[(i + list.length) % list.length];
       if (a) { const p = new Image(); p.decoding = 'async'; p.src = a.href; }
@@ -1225,9 +1464,8 @@
       // 入ってくる写真を、アニメーションなしで開始位置（進む向きの少し先・透明）に置いてから読み込む
       next.classList.add('no-anim');
       next.classList.remove('is-current', 'is-leaving');
-      next.src = a.href;
       next.alt = thumb ? thumb.alt : '';
-      ready(next).then(() => {
+      setSrc(next, a).then(() => ready(next)).then(() => {
         if (t !== token) return;
         void next.offsetWidth; // 開始位置を確定させてから動かす
         if (!instant) next.classList.remove('no-anim');
@@ -1238,6 +1476,7 @@
         prev.classList.add('is-leaving');
         prev.setAttribute('aria-hidden', 'true');
         cur = 1 - cur;
+        alignClose();
         if (instant) requestAnimationFrame(() => next.classList.remove('no-anim'));
         preload(index + dir); // 次に開きそうな写真を先に読んでおく
       });
