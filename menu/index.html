@@ -72,17 +72,31 @@
       <div class="stack-s"><p class="eyebrow">Food</p><h2 class="h2">お食事 — 提携店のお料理</h2></div>
       <p class="small">L.O. <span class="n-m">21:30</span>｜各提携店の休日はその店の料理もオーダーストップ</p>
     </div>
-    <!-- TODO(未確定): 料理写真はイメージ。提携店の実際の料理写真・ジャンル・代表メニューに差し替え -->
-    <div class="grid grid--220">
-      <article class="stack-s"><img class="media ar-1" src="../assets/images/food.jpg" alt="料理" width="300" height="300" loading="lazy"><h3 class="label">Kitchen KEIJI</h3><p class="small">［ジャンル・代表メニュー］</p></article>
-      <article class="stack-s"><img class="media ar-1" src="../assets/images/wine-snacks-2.jpg" alt="ワインとおつまみ" width="300" height="300" loading="lazy"><h3 class="label">ピザか屋 Encuentro</h3><p class="small">［ジャンル・代表メニュー］</p></article>
-      <article class="stack-s"><img class="media ar-1" src="../assets/images/wine-snacks-1.jpg" alt="ワインとおつまみ" width="300" height="300" loading="lazy"><h3 class="label">bistro らぐ〜</h3><p class="small">［ジャンル・代表メニュー］</p></article>
-      <article class="stack-s"><img class="media ar-1" src="../assets/images/anniversary-cake.jpg" alt="記念日のケーキ" width="300" height="300" loading="lazy"><h3 class="label">くめバル59</h3><p class="small">［ジャンル・代表メニュー］</p></article>
-      <article class="stack-s"><img class="media ar-1" src="../assets/images/cake-service.jpg" alt="ケーキのサービス" width="300" height="300" loading="lazy"><h3 class="label">いざかやデンジン</h3><p class="small">［ジャンル・代表メニュー］</p></article>
-    </div>
-    <div class="btn-row btn-row--sp">
-      <a href="#grand-menu" class="btn btn-line">グランドメニュー（PDF）</a>
-      <a href="#event-menu" class="btn btn-line">イベントメニュー（PDF）</a>
+    <!-- 文章・提携店・メニュー（左）と写真3枚（右）を 6:4 で。TOP の「ちょっと気取った、」と同じ並び（.photo-trio） -->
+    <div class="split split--wide split--center split--6-4">
+      <div class="stack-m">
+        <p class="lead">久米川の名店シェフが腕によりをかけたオードブルをはじめ、<br class="sp-hide">イタリアン、スペイン料理、フランス料理を堪能いただけます。</p>
+        <!-- 提携店（外部サイトは別タブで開く：build.mjs） -->
+        <div class="stack-s">
+          <h3 class="label">提携店</h3>
+          <ul class="partner-links">
+            <li><a href="https://www.hotpepper.jp/strJ000750035/" class="link-arrow" target="_blank" rel="noopener">Kitchen KEIJI（キッチンケイジ）</a></li>
+            <li><a href="https://www.hotpepper.jp/strJ001126734/" class="link-arrow" target="_blank" rel="noopener">ピザか屋 Encuentro</a></li>
+            <li><a href="https://www.hotpepper.jp/strJ001232000/" class="link-arrow" target="_blank" rel="noopener">bistro らぐ〜</a></li>
+            <li><a href="https://tabelog.com/tokyo/A1328/A132806/13290020/" class="link-arrow" target="_blank" rel="noopener">くめバル59</a></li>
+            <li><a href="https://tabelog.com/tokyo/A1328/A132806/13162974/" class="link-arrow" target="_blank" rel="noopener">いざかやデンジン</a></li>
+          </ul>
+        </div>
+        <div class="btn-row btn-row--sp">
+          <a href="#grand-menu" class="btn btn-line">グランドメニュー（PDF）</a>
+          <a href="#event-menu" class="btn btn-line">イベントメニュー（PDF）</a>
+        </div>
+      </div>
+      <div class="photo-trio">
+        <img class="media" src="../assets/images/food-buffet.jpg" alt="カウンターに並んだビュッフェの大皿料理" width="452" height="600" loading="lazy">
+        <img class="media ar-1" src="../assets/images/food-chefs.jpg" alt="料理を盛り付けるシェフ" width="797" height="600" loading="lazy">
+        <img class="media ar-1" src="../assets/images/food-plates.jpg" alt="前菜の盛り合わせのお皿" width="797" height="600" loading="lazy">
+      </div>
     </div>
   </div>
 </section>
@@ -188,6 +202,7 @@
         <a href="../recruit/">採用情報</a>
         <a href="../contact/">お問い合わせ</a>
         <a href="https://store.52nd.jp/" target="_blank" rel="noopener">公式ストア</a>
+        <a href="../terms/">会員規約</a>
         <a href="../privacy/">個人情報保護方針</a>
         <a href="../sitemap/">サイトマップ</a>
       </nav>
