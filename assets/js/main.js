@@ -137,7 +137,10 @@
       //   early … 前の段が出終わるこの時間（ms）前から始める（省略時 overlap）
       //   dur   … フェードインにかかる時間（ms、省略時 partDur）
       //   stagger … 並んだものの時間差（秒、省略時 stagger）。together: true なら全部同時
-      '#welcome': ['.h2, .eyebrow, .rule', '.lead', '.btn-row', { sel: '.welcome__photo', ...PHOTO_STEP }], // タイトル → 文章 → ボタン → 写真
+      // タイトル → 文章 → ボタン → 写真（文章→ボタンと同じ間合い＝ボタンが出終わる overlap（0.3秒）前から、2秒かけてフェードイン）
+      '#welcome': ['.h2, .eyebrow, .rule', '.lead', '.btn-row', { sel: '.welcome__photo', dur: 2000 }],
+      // ジャズライブ・イベント：見出し（英字・タイトル・ボタン）が出終わったらすぐ（early: 0）、フライヤーのカードを順に
+      '#live': ['.h2, .eyebrow, .sec-head .btn', { sel: '.live-card', early: 0 }],
       '#concept': ['.h2, .eyebrow, .rule', '.lead', '.link-arrow', { sel: '.concept-photos img', ...PHOTO_STEP }], // タイトル → 文章 → リンク → 写真（3枚を1枚ずつ）
     },
     overlap: 300, // 次の段を、前の段が出終わるこの時間（ms）前から始める
@@ -149,6 +152,8 @@
     // 下層ページのタイトル上の英字（eyebrow）は少し速く：一文字の時間差・一文字が出る時間（ms）
     eyebrowStep: 30, eyebrowDur: 450,
     titleGap: 200, // 英字のあと h1 が出始めるまでの間（ms）
+    titleGapTop: 0, // TOP のほかのセクション：タイトルが出終わってから、その下のパーツが出始めるまでの間（ms。0＝出終わったらすぐ）
+    heroImgDur: 5400, // 下層ページ：タイトル横の写真のフェードインの時間（ms。ほかのパーツ partDur の6倍）
     stagger: 0.08, // 並んだパーツの時間差（秒）
     staggerMax: 0.48,
   };
@@ -157,9 +162,10 @@
   const h1Only = document.documentElement.classList.contains('anim--h1');
   if (h1Only) {
     REVEAL.titles = 'main .page-hero .eyebrow, main .h1';
-    REVEAL.parts = ':not(*)';
-    // 英字の最後の一文字が出始めてから titleGap（ms）後に、h1 の一文字目が出始める
-    REVEAL.order = { '.page-hero': ['.eyebrow', { sel: '.h1', early: REVEAL.eyebrowDur - REVEAL.titleGap }] };
+    REVEAL.parts = 'main .page-hero__inner--split > :is(.media, .video)'; // タイトル横の写真（メニュー・ミュージシャン・採用情報）
+    // 英字の最後の一文字が出始めてから titleGap（ms）後に、h1 の一文字目が出始める。
+    // タイトル横の写真は、h1 の一文字目と同時に（同じ段・together）、heroImgDur（ms）かけてフェードイン
+    REVEAL.order = { '.page-hero': ['.eyebrow', { sel: '.h1, .page-hero__inner--split > :is(.media, .video)', early: REVEAL.eyebrowDur - REVEAL.titleGap, together: true, dur: REVEAL.heroImgDur }] };
   }
   // 店舗についてのタブで移るときは、次のページのタイトルを動かさない（head のスクリプトが読む）
   document.querySelectorAll('.tabs a').forEach((a) => {
@@ -204,6 +210,7 @@
       el.setAttribute('data-reveal', '');
       parts.push(el);
     });
+    document.documentElement.classList.add('reveal-marked'); // 印付けが済んだ（CSS の「印が付く前は隠す」を外す）
     // 同じ親に並ぶパーツは少しずつ遅らせる
     const groups = new Map();
     parts.forEach((el) => {
@@ -231,6 +238,31 @@
         });
       });
     });
+    // ほかのセクション（REVEAL.order にないもの）：タイトルが出終わってから REVEAL.titleGapTop（ms）後に、その下のパーツをフェードイン。
+    // セクションの中にタイトルが複数あるとき（52番街ギャラリーとグッズなど）は、それぞれのタイトルの下のまとまりごとに
+    if (!h1Only) {
+      const ordered = Object.keys(REVEAL.order).map((q) => document.querySelector(q)).filter(Boolean);
+      document.querySelectorAll('main section').forEach((sec) => {
+        if (ordered.includes(sec) || ordered.some((o) => o.contains(sec) || sec.contains(o))) return;
+        const inSec = targets.filter((el) => sec.contains(el) && !stepOf.has(el));
+        const heads = inSec.filter((el) => el.classList.contains('split-title'));
+        if (!heads.length) return;
+        // タイトルのまわりはタイトルと同じ段（0段目）：見出し枠（.sec-head）があればその中すべて、
+        // なければ同じ親の英字（.eyebrow）と線（.rule）だけ
+        const headBox = (t) => t.closest('.sec-head') || t.parentElement;
+        const isHeadPart = (t, el) => (t.closest('.sec-head') ? true : el.matches('.eyebrow, .rule') && el.parentElement === t.parentElement);
+        heads.forEach((t) => {
+          stepOf.set(t, { sec: t, step: 0, overlap: REVEAL.overlap });
+          inSec.filter((el) => el !== t && headBox(t).contains(el) && isHeadPart(t, el) && !heads.some((h) => h !== t && headBox(h).contains(el)))
+            .forEach((el) => stepOf.set(el, { sec: t, step: 0, overlap: REVEAL.overlap }));
+        });
+        // 残りのパーツは、文書の順で直前にあるタイトルのまとまりの1段目
+        inSec.filter((el) => !stepOf.has(el)).forEach((el) => {
+          const prev = heads.filter((t) => t.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).pop() || heads[0];
+          stepOf.set(el, { sec: prev, step: 1, overlap: -REVEAL.titleGapTop });
+        });
+      });
+    }
     // ローディング画面が消えてから動かし始める（裏で再生されて見逃さないように）
     whenLoaderDone.then(() => {
     if ('IntersectionObserver' in window) {
@@ -355,7 +387,8 @@
     density: 1 / 2200, // 星の密度（px² あたり）
     maxStars: 650,
     edgeFade: 24, // セクションの上下端から、この距離（px）で星を消す
-    dprMax: 1.5, // 高解像度画面でも描画の細かさはここまで（負担を抑える）
+    dprMax: 1, // 描画の細かさ（星は小さくぼんやりした光なので1倍で十分。メモリを抑える）
+    keepMargin: '600px 0px', // 画面からこの距離（上下）以内のセクションだけ canvas を確保する（離れたら空にしてメモリを返す）
     periodMin: 5, // 点滅の周期（秒）
     periodMax: 13,
     fps: 24, // 点滅だけのときの描画の上限（スクロール中は毎フレーム描く）
@@ -363,11 +396,12 @@
     glintShare: 0.5, // 大きい星のうち光らせる割合
     glintMin: 4,
     glintMax: 9,
-    // スクロール連動（パララックス）：セクションが画面を通過する間に動く幅（±px）
-    parallaxNear: 90, // 大きく明るい星（手前）
-    parallaxFar: 12, // 小さく暗い星（奥）
-    nebulaShift: 28, // 星雲・天の川
-    ease: 0.06, // スクロール位置への追従の速さ（小さいほどゆっくり遅れてついてくる）
+    // スクロール連動（パララックス）：セクションが画面を通過する間に、ページの流れと逆向き（下）へずらす幅（±px）。
+    // 大きいほどページより遅れて流れ、遠くでゆっくり動いて見える。奥の星ほど大きくずらす
+    parallaxNear: 300, // 大きく明るい星（手前）
+    parallaxFar: 700, // 小さく暗い星（奥）
+    nebulaShift: 1000, // 星雲・天の川
+    layers: 4, // 奥行きの段数（canvas の枚数）
     // 色：白・シャンパンゴールド・淡い青（出現比率つき）
     colors: [[255, 252, 244, 0.62], [232, 214, 168, 0.24], [190, 205, 255, 0.14]],
   };
@@ -401,8 +435,13 @@
       for (let i = 0; i < SKY.colors.length; i++) { acc += SKY.colors[i][3]; if (v < acc) return i; }
       return 0;
     };
+    // 星は奥行きごとに SKY.layers 枚の canvas に分けて描く。各 canvas は動く幅（amp）の分だけ上下に大きくし、
+    // スクロールに合わせて canvas ごと上下に動かす（パララックス）。
+    // 対応ブラウザは CSS のスクロール連動アニメーション（.is-tl）で動かす：スクロールと同じ描画で動くので遅れない。
+    // 未対応ブラウザは毎フレーム JS で位置を合わせる。canvas の描き直しは点滅のためだけ（SKY.fps）
+    const tl = window.CSS && CSS.supports && CSS.supports('animation-timeline: scroll()');
+    const layerAmp = (li) => SKY.parallaxFar + (SKY.parallaxNear - SKY.parallaxFar) * ((li + 0.5) / SKY.layers);
     const state = skies.map((el, i) => {
-      const canvas = el.querySelector('canvas');
       const rnd = seeded(1000 + i * 7919);
       // 星雲の位置と天の川の角度をセクションごとに変える
       el.style.setProperty('--n1x', `${10 + rnd() * 35}%`);
@@ -412,41 +451,92 @@
       el.style.setProperty('--n3x', `${30 + rnd() * 50}%`);
       el.style.setProperty('--n3y', `${5 + rnd() * 30}%`);
       el.style.setProperty('--sky-angle', `${95 + rnd() * 50}deg`);
-      return { el, canvas, ctx: canvas.getContext('2d'), seed: 5000 + i * 104729, stars: [], visible: false, w: 0, h: 0, dpr: 1, shift: null };
+      el.style.setProperty('--neb', `${SKY.nebulaShift}px`); // 星雲・天の川の動く幅（CSS の skyNebula）
+      // 星のレイヤー（奥 → 手前）。上下の端は .night-sky__stars のマスクで薄くして消す
+      const old = el.querySelector('canvas');
+      const wrap = document.createElement('div');
+      wrap.className = 'night-sky__stars';
+      const layers = Array.from({ length: SKY.layers }, (_, li) => {
+        const canvas = document.createElement('canvas');
+        canvas.className = 'night-sky__layer';
+        canvas.width = canvas.height = 0; // 画面の近くに来るまでは確保しない（alloc）
+        const amp = layerAmp(li);
+        canvas.style.setProperty('--amp', `${amp.toFixed(1)}px`);
+        wrap.appendChild(canvas);
+        return { canvas, ctx: canvas.getContext('2d'), amp, stars: [] };
+      });
+      if (old) old.replaceWith(wrap); else el.appendChild(wrap);
+      return { el, layers, tl: tl && !reduceMotion.matches, range: '', alloc: false, seed: 5000 + i * 104729, visible: false, w: 0, h: 0, dpr: 1 };
     });
+
+    // スクロール連動の区間：セクションが画面の下端に入る位置 → 上端から抜ける位置（ページのスクロール量）
+    // 区間が変わったときは .is-tl を付け直してアニメーションを作り直す（Chrome は動いている途中の区間の変更を正しく反映しないため）
+    const measure = (s) => {
+      if (!s.tl) return;
+      const r = s.el.getBoundingClientRect();
+      const top = r.top + window.scrollY;
+      const from = Math.round(top - window.innerHeight), to = Math.round(top + r.height);
+      const range = `${from} ${to}`;
+      if (range === s.range) return;
+      s.range = range;
+      s.el.classList.remove('is-tl');
+      s.el.style.setProperty('--sky-s', `${from}px`);
+      s.el.style.setProperty('--sky-e', `${to}px`);
+      void s.el.offsetWidth;
+      s.el.classList.add('is-tl');
+    };
 
     const layout = (s) => {
       const w = s.el.clientWidth, h = s.el.clientHeight;
       if (!w || !h) return;
       const dpr = Math.min(window.devicePixelRatio || 1, SKY.dprMax);
       s.w = w; s.h = h; s.dpr = dpr;
-      s.canvas.width = Math.round(w * dpr);
-      s.canvas.height = Math.round(h * dpr);
       const rnd = seeded(s.seed);
-      const n = Math.min(SKY.maxStars, Math.round(w * h * SKY.density));
-      s.stars = Array.from({ length: n }, () => {
+      s.layers.forEach((L) => { L.stars = []; });
+      // 星は動く幅の分だけ上下にはみ出した範囲にも置く（動いたときに端に空白を作らない）
+      const pad = Math.max(SKY.parallaxNear, SKY.parallaxFar);
+      const n = Math.min(SKY.maxStars, Math.round(w * (h + 2 * pad) * SKY.density));
+      for (let k = 0; k < n; k++) {
         const big = rnd() < 0.06; // 6% は大きめの明るい星
         const r = big ? 1.1 + rnd() * 0.9 : 0.35 + Math.pow(rnd(), 2) * 0.75;
-        return {
+        const st = {
           x: rnd() * w,
-          y: rnd() * h,
+          y: rnd() * (h + 2 * pad) - pad, // セクションの上端が0
           r,
           a: big ? 0.75 + rnd() * 0.25 : 0.3 + rnd() * 0.55, // 一番明るいときの明るさ
           low: 0.12 + rnd() * 0.3, // 一番暗いときの割合（消えきらない）
           p: SKY.periodMin + rnd() * (SKY.periodMax - SKY.periodMin),
           ph: rnd() * Math.PI * 2,
           c: pickColor(rnd()),
-          // 奥行き（0=奥〜1=手前）：大きく明るい星ほど手前でよく動く
-          z: Math.min(1, (r - 0.35) / 1.65 * 0.7 + rnd() * 0.3),
           // キラッと光る輝き（周期と開始のずれ）
           gp: big && rnd() < SKY.glintShare ? SKY.glintMin + rnd() * (SKY.glintMax - SKY.glintMin) : 0,
           go: rnd() * 10,
         };
+        // 奥行き（0=奥〜1=手前）：大きく明るい星ほど手前でよく動く
+        const z = Math.min(0.999, (r - 0.35) / 1.65 * 0.7 + rnd() * 0.3);
+        s.layers[Math.floor(z * SKY.layers)].stars.push(st);
+      }
+      measure(s);
+      if (s.alloc || s.near) alloc(s, true);
+    };
+
+    // canvas の確保と解放：画面の近くに来たら大きさを決めて描き、離れたら大きさ0にしてメモリを返す
+    const alloc = (s, force = false) => {
+      if (!s.w || (s.alloc && !force)) return;
+      s.alloc = true;
+      s.layers.forEach((L) => {
+        L.canvas.width = Math.round(s.w * s.dpr);
+        L.canvas.height = Math.round((s.h + 2 * L.amp) * s.dpr);
       });
       draw(s, performance.now() / 1000);
     };
+    const release = (s) => {
+      if (!s.alloc) return;
+      s.alloc = false;
+      s.layers.forEach((L) => { L.canvas.width = 0; L.canvas.height = 0; });
+    };
 
-    // セクションが画面下端に入った時 +1 → 中央 0 → 上端から抜けた時 -1
+    // セクションが画面下端に入った時 +1 → 中央 0 → 上端から抜けた時 -1（CSS 未対応ブラウザ用）
     const scrollPos = (s) => {
       const r = s.el.getBoundingClientRect();
       const vh = window.innerHeight;
@@ -455,48 +545,42 @@
     };
 
     const draw = (s, t) => {
-      const { ctx, dpr } = s;
-      const k = s.shift || 0;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, s.w, s.h);
-      const span = s.h + 20; // 上下にはみ出した星は反対側から出す（空白を作らない）
-      for (const st of s.stars) {
-        // サイン波でなめらかに明滅（動きを減らす設定では一定）
-        const wave = reduceMotion.matches ? 0.75 : 0.5 + 0.5 * Math.sin((t / st.p) * Math.PI * 2 + st.ph);
-        const eased = wave * wave * (3 - 2 * wave);
-        const amp = SKY.parallaxFar + (SKY.parallaxNear - SKY.parallaxFar) * st.z;
-        const y = ((((st.y + amp * k + 10) % span) + span) % span) - 10;
-        const d = st.r * 8; // にじみ込みの描画サイズ
-        // セクションの上下の端では星を薄くして消す（端で切れた半円の光が境目に並ばないように）
-        const edge = Math.min(y, s.h - y);
-        const fade = (r) => Math.min(1, Math.max(0, (edge - r) / SKY.edgeFade));
-        const f0 = fade(d / 2);
-        ctx.globalAlpha = st.a * (st.low + (1 - st.low) * eased) * f0;
-        if (f0 > 0) ctx.drawImage(sprites[st.c], st.x - d / 2, y - d / 2, d, d);
-        // キラッと光る輝き：周期の終わりの12%で、ふくらんで強く光って消える
-        if (st.gp && !reduceMotion.matches) {
-          const ph = ((t + st.go) % st.gp) / st.gp;
-          if (ph > 0.88) {
-            const g = Math.sin(((ph - 0.88) / 0.12) * Math.PI);
-            const gd = d * (1 + 2.2 * g);
-            ctx.globalAlpha = Math.min(1, 0.95 * g) * fade(gd / 2);
-            if (ctx.globalAlpha > 0) ctx.drawImage(sprites[0], st.x - gd / 2, y - gd / 2, gd, gd);
+      if (!s.alloc) return;
+      const { dpr } = s;
+      s.layers.forEach((L) => {
+        const { ctx, amp } = L;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, s.w, s.h + 2 * amp);
+        for (const st of L.stars) {
+          // サイン波でなめらかに明滅（動きを減らす設定では一定）
+          const wave = reduceMotion.matches ? 0.75 : 0.5 + 0.5 * Math.sin((t / st.p) * Math.PI * 2 + st.ph);
+          const eased = wave * wave * (3 - 2 * wave);
+          const y = st.y + amp; // canvas は amp だけ上から始まる
+          const d = st.r * 8; // にじみ込みの描画サイズ
+          ctx.globalAlpha = st.a * (st.low + (1 - st.low) * eased);
+          ctx.drawImage(sprites[st.c], st.x - d / 2, y - d / 2, d, d);
+          // キラッと光る輝き：周期の終わりの12%で、ふくらんで強く光って消える
+          if (st.gp && !reduceMotion.matches) {
+            const ph = ((t + st.go) % st.gp) / st.gp;
+            if (ph > 0.88) {
+              const g = Math.sin(((ph - 0.88) / 0.12) * Math.PI);
+              const gd = d * (1 + 2.2 * g);
+              ctx.globalAlpha = Math.min(1, 0.95 * g);
+              ctx.drawImage(sprites[0], st.x - gd / 2, y - gd / 2, gd, gd);
+            }
           }
         }
-      }
-      ctx.globalAlpha = 1;
+        ctx.globalAlpha = 1;
+      });
     };
 
-    // スクロール位置へ少しずつ近づける（ゆっくり遅れてついてくる動き）
+    // CSS 未対応ブラウザ：スクロール位置に合わせて、レイヤーと星雲を動かす
     const follow = (s) => {
-      const target = scrollPos(s);
-      const first = s.shift === null;
-      if (first) s.shift = target;
-      const diff = target - s.shift;
-      if (!first && Math.abs(diff) < 0.0005) return false;
-      s.shift += diff * SKY.ease;
-      s.el.style.setProperty('--sky-shift', `${(SKY.nebulaShift * s.shift).toFixed(2)}px`);
-      return true;
+      const k = scrollPos(s);
+      if (k === s.k) return;
+      s.k = k;
+      s.layers.forEach((L) => { L.canvas.style.transform = `translate3d(0, ${(-L.amp * k).toFixed(1)}px, 0)`; });
+      s.el.style.setProperty('--sky-shift', `${(-SKY.nebulaShift * k).toFixed(2)}px`);
     };
 
     const io = new IntersectionObserver((entries) => {
@@ -505,25 +589,40 @@
         if (s) s.visible = en.isIntersecting;
       });
     }, { rootMargin: '100px 0px' });
+    // canvas を確保しておく範囲（見える範囲より広め：速くスクロールしても描く前の空白が見えないように）
+    const keep = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        const s = state.find((x) => x.el === en.target);
+        if (!s) return;
+        s.near = en.isIntersecting;
+        if (s.near) alloc(s); else release(s);
+      });
+    }, { rootMargin: SKY.keepMargin });
     const ro = new ResizeObserver((entries) => {
       entries.forEach((en) => {
         const s = state.find((x) => x.el === en.target);
         if (s) layout(s);
       });
     });
-    state.forEach((s) => { io.observe(s.el); ro.observe(s.el); });
+    state.forEach((s) => { io.observe(s.el); keep.observe(s.el); ro.observe(s.el); });
+    // 写真の読み込みなどでページの高さが変わったら、スクロール連動の区間を測り直す
+    if (tl) {
+      const remeasure = () => state.forEach(measure);
+      new ResizeObserver(remeasure).observe(document.body);
+      window.addEventListener('resize', remeasure);
+      window.addEventListener('load', remeasure);
+    }
 
     if (!reduceMotion.matches) {
       let last = 0;
       const frame = (now) => {
         requestAnimationFrame(frame);
-        const t = now / 1000;
         const tick = now - last >= 1000 / SKY.fps; // 点滅の更新タイミング
         if (tick) last = now;
         state.forEach((s) => {
-          if (!s.visible || !s.stars.length) return;
-          const moving = follow(s); // 動いている間は毎フレーム描いてなめらかに
-          if (moving || tick) draw(s, t);
+          if (!s.visible || !s.w) return;
+          if (!tl) follow(s);
+          if (tick) draw(s, now / 1000);
         });
       };
       requestAnimationFrame(frame);
@@ -579,6 +678,54 @@
       heroImg.style.transform = `translate3d(0, ${y.toFixed(1)}px, 0)`;
     };
     window.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(update); }, { passive: true });
+    update();
+  }
+
+  /* ---------- パララックス（[data-parallax] の写真・下層ページのヘッダーの背景写真） ----------
+     枠が画面の下から入って上へ抜けるあいだに、写真を -range → 0（px）へ動かす＝ページより遅く流れる。
+     最初から画面に見えている枠（ページヘッダー）は、読み込んだ位置から上へ抜けるまでの間で動かす。
+     対応ブラウザは CSS のスクロール連動アニメーション（.px-tl）で動かす：スクロールと同じ描画で動くので遅れない。
+     ここでは動かす区間（スクロール位置 --px-s → --px-e）だけを測って渡す。未対応ブラウザは scroll イベントで動かす */
+  const pxImgs = [...document.querySelectorAll('[data-parallax], .page-hero > .page-hero__bg')];
+  if (pxImgs.length && !reduceMotion.matches && supportsScrollTl) {
+    const measure = () => {
+      const vh = window.innerHeight;
+      pxImgs.forEach((img) => {
+        const r = img.parentElement.getBoundingClientRect();
+        const top = r.top + window.scrollY; // 枠の上端（ページ上の位置）
+        const from = Math.max(0, top - vh).toFixed(0), to = (top + r.height).toFixed(0); // 下から入る（最初から見えていれば0） → 上へ抜ける
+        if (img.dataset.pxRange === `${from} ${to}`) return;
+        img.dataset.pxRange = `${from} ${to}`;
+        // 区間が変わったときは .px-tl を付け直してアニメーションを作り直す（動いている途中の区間の変更は正しく反映されないため）
+        img.classList.remove('px-tl');
+        img.style.setProperty('--px-s', `${from}px`);
+        img.style.setProperty('--px-e', `${to}px`);
+        void img.offsetWidth;
+        img.classList.add('px-tl');
+      });
+    };
+    measure();
+    // 写真の読み込みなどでページの高さが変わったら測り直す
+    if ('ResizeObserver' in window) new ResizeObserver(() => measure()).observe(document.body);
+    window.addEventListener('resize', measure);
+    window.addEventListener('load', measure);
+  } else if (pxImgs.length && !reduceMotion.matches) {
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const vh = window.innerHeight;
+      pxImgs.forEach((img) => {
+        const frame = img.parentElement;
+        const r = frame.getBoundingClientRect();
+        if (r.bottom < -50 || r.top > vh + 50) return; // 画面外は動かさない
+        const range = parseFloat(getComputedStyle(frame).getPropertyValue('--px-range')) || 160;
+        const start = Math.min(vh, r.top + window.scrollY); // 動き始める位置（枠の上端の画面内の位置）
+        const p = Math.min(1, Math.max(0, (start - r.top) / (start + r.height))); // 0：動き始め → 1：上へ抜ける
+        img.style.transform = `translate3d(0, ${((p - 1) * range).toFixed(1)}px, 0)`;
+      });
+    };
+    window.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(update); }, { passive: true });
+    window.addEventListener('resize', update);
     update();
   }
 
@@ -1444,6 +1591,7 @@
       const a = list[(i + list.length) % list.length];
       if (a) { const p = new Image(); p.decoding = 'async'; p.src = a.href; }
     };
+    const LB_LOADING_DELAY = 200; // この時間（ms）たっても次の写真が出なければ「読込中…」にする
     const show = (i, dir = 1, instant = false) => {
       index = (i + list.length) % list.length;
       const a = list[index];
@@ -1457,8 +1605,22 @@
       next.classList.add('no-anim');
       next.classList.remove('is-current', 'is-leaving');
       next.alt = thumb ? thumb.alt : '';
+      // 読み込みに時間がかかるときは、今の写真を「読込中…」に替えて、押したことが分かるようにする（読み込めたら入れ替え）
+      let loaded = false;
+      const phTimer = setTimeout(() => {
+        if (loaded || t !== token || prev.src === PH_LOADING) return;
+        prev.src = PH_LOADING;
+        prev.alt = '読込中';
+        prev.classList.add('is-ph', 'is-current'); // 開いた直後は見えていないので、見える状態にする
+        prev.classList.remove('is-leaving');
+        ready(prev).then(alignClose);
+      }, LB_LOADING_DELAY);
       setSrc(next, a).then(() => ready(next)).then(() => {
+        loaded = true;
+        clearTimeout(phTimer);
         if (t !== token) return;
+        next.classList.remove('is-ph');
+        prev.classList.remove('is-ph'); // 明滅を止めてからフェードアウト
         void next.offsetWidth; // 開始位置を確定させてから動かす
         if (!instant) next.classList.remove('no-anim');
         next.classList.add('is-current');
@@ -1475,7 +1637,8 @@
     };
     const open = (i) => {
       lightbox.classList.remove('is-closing');
-      imgs.forEach((im) => { im.classList.add('no-anim'); im.classList.remove('is-current', 'is-leaving'); });
+      imgs.forEach((im) => { im.classList.add('no-anim'); im.classList.remove('is-current', 'is-leaving', 'is-ph'); });
+      imgs[cur].src = PH_LOADING; // 前に見た写真が残らないように（見えない状態。時間がかかれば show が「読込中…」を出す）
       show(i, 1, true);
       lightbox.showModal();
       preload(i - 1);
