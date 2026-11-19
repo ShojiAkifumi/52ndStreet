@@ -165,6 +165,10 @@ REVEAL.titles = 'main .page-hero .eyebrow, main .h1';
 REVEAL.parts = 'main .page-hero__inner--split > :is(.media, .video)';
 REVEAL.order = { '.page-hero': ['.eyebrow', { sel: '.h1, .page-hero__inner--split > :is(.media, .video)', early: REVEAL.eyebrowDur - REVEAL.titleGap, together: true, dur: REVEAL.heroImgDur }] };
 }
+document.querySelectorAll('.tabs').forEach((tabs) => {
+const cur = tabs.querySelector('[aria-current]');
+if (cur && tabs.scrollWidth > tabs.clientWidth) tabs.scrollLeft = Math.max(0, cur.offsetLeft - tabs.offsetLeft - 16);
+});
 document.querySelectorAll('.tabs a').forEach((a) => {
 a.addEventListener('click', () => { try { sessionStorage.setItem('skipTitleAnim', '1'); } catch (e) { /* 保存できなければ通常どおり */ } });
 });
