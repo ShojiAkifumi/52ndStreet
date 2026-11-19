@@ -140,6 +140,10 @@ order: {
 '#jazz': ['.jz-intro__title, .eyebrow, .rule, .jz-card'],
 '#concept': ['.h2, .eyebrow, .rule', '.lead', { sel: '.concept-photos img', ...PHOTO_STEP, early: undefined, with: true }, '.link-arrow'],
 },
+orderSp: {
+'#welcome': ['.h2, .eyebrow, .rule', { sel: '.welcome__photo', dur: 1200 }, '.lead', '.btn-row'],
+'#concept': [{ sel: '.concept-photos img', dur: 1200 }, '.h2, .eyebrow, .rule', '.lead', '.link-arrow'],
+},
 overlap: 300,
 waitMax: 3000,
 charDur: 700,
@@ -155,6 +159,7 @@ staggerMax: 0.48,
 };
 const animOn = document.documentElement.classList.contains('anim');
 const h1Only = document.documentElement.classList.contains('anim--h1');
+if (window.matchMedia('(max-width: 900px)').matches) Object.assign(REVEAL.order, REVEAL.orderSp);
 if (h1Only) {
 REVEAL.titles = 'main .page-hero .eyebrow, main .h1';
 REVEAL.parts = 'main .page-hero__inner--split > :is(.media, .video)';
