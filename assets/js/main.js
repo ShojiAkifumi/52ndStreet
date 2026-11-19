@@ -1,6 +1,31 @@
 (() => {
 'use strict';
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const stableVH = () => document.documentElement.clientHeight || window.innerHeight;
+const onViewResize = (fn) => {
+let w = window.innerWidth, h = stableVH();
+window.addEventListener('resize', () => {
+const nw = window.innerWidth, nh = stableVH();
+if (nw === w && nh === h) return;
+w = nw; h = nh;
+fn();
+});
+};
+const saStyle = document.createElement('style');
+document.head.appendChild(saStyle);
+const saRules = new Map();
+const setScrollAnim = (key, selector, prop, points, extra = null) => {
+if (!points) { saRules.delete(key); saStyle.textContent = [...saRules.values()].join('\n'); return; }
+const y0 = points[0][0], y1 = points[points.length - 1][0];
+const span = y1 - y0 || 1;
+const name = `sa-${key}`;
+const kf = points.map(([y, v]) => `${(((y - y0) / span) * 100).toFixed(4)}%{${prop}:${v}}`).join('');
+const anim = extra ? `${extra.animation}, ${name} linear both` : `${name} linear both`;
+const timeline = extra ? 'auto, scroll(root block)' : 'scroll(root block)';
+const range = extra ? `normal, ${y0.toFixed(1)}px ${y1.toFixed(1)}px` : `${y0.toFixed(1)}px ${y1.toFixed(1)}px`;
+saRules.set(key, `@keyframes ${name}{${kf}}${selector}{animation:${anim};animation-timeline:${timeline};animation-range:${range}}`);
+saStyle.textContent = [...saRules.values()].join('\n');
+};
 const LOADER = { minFirst: 1800, minRepeat: 500, max: 4000, fade: 900 };
 const rootEl = document.documentElement;
 const loaderEl = document.querySelector('.loader');
@@ -399,11 +424,9 @@ return { el, layers, pinSec, anims: [], tl: tl && !reduceMotion.matches, range: 
 const measure = (s) => {
 if (!s.tl) return;
 if (s.pinSec && measurePinned(s)) return;
-s.anims.forEach((a) => a.cancel());
-s.anims = [];
 const r = s.el.getBoundingClientRect();
 const top = r.top + window.scrollY;
-const from = Math.round(top - window.innerHeight), to = Math.round(top + r.height);
+const from = Math.round(top - stableVH()), to = Math.round(top + r.height);
 const range = `${from} ${to}`;
 if (range === s.range) return;
 s.range = range;
@@ -417,33 +440,35 @@ const measurePinned = (s) => {
 const sec = s.pinSec;
 const pin = s.el.closest('.jz-pin');
 const travel = sec.classList.contains('is-hscroll') ? sec.offsetHeight - pin.offsetHeight : 0;
-if (travel <= 0 || !('ScrollTimeline' in window)) return false;
-const vh = window.innerHeight;
-const max = document.documentElement.scrollHeight - vh;
+if (travel <= 0) {
+if (s.anims.length) { s.anims.forEach((k) => setScrollAnim(k)); s.anims = []; }
+return false;
+}
+const vh = stableVH();
 const secTop = sec.getBoundingClientRect().top + window.scrollY;
 const pinStart = secTop - (parseFloat(getComputedStyle(pin).top) || 0);
 const pinEnd = pinStart + travel;
 const from = secTop - vh, to = secTop + s.el.offsetHeight;
-const key = `pin ${Math.round(from)} ${Math.round(to)} ${Math.round(travel)} ${Math.round(max)}`;
+const key = `pin ${Math.round(from)} ${Math.round(to)} ${Math.round(travel)} ${s.layers.map((L) => L.amp.toFixed(1)).join(',')}`;
 if (key === s.range && s.anims.length) return true;
 s.range = key;
 const prog = (y) => {
 const yy = y < pinStart ? y : y < pinEnd ? pinStart : y - travel;
 return Math.min(1, Math.max(0, (yy - from) / (to - from)));
 };
-const ys = [0, from, pinStart, pinEnd, to + travel, max]
-.map((y) => Math.min(max, Math.max(0, y)))
-.sort((a, b) => a - b)
-.filter((y, i, a) => i === 0 || y > a[i - 1]);
-const timeline = new ScrollTimeline({ source: document.documentElement, axis: 'block' });
-const frames = (amp, prop) => ys.map((y) => {
-const v = (-amp + 2 * amp * prog(y)).toFixed(1);
-return { offset: max ? y / max : 0, [prop]: prop === 'transform' ? `translate3d(0, ${v}px, 0)` : `0 ${v}px` };
-});
-s.anims.forEach((a) => a.cancel());
+const ys = [from, pinStart, pinEnd, to + travel].sort((a, b) => a - b).filter((y, i, a) => i === 0 || y > a[i - 1]);
+const pts = (amp, fmt) => ys.map((y) => [y, fmt((-amp + 2 * amp * prog(y)).toFixed(1))]);
 s.el.classList.remove('is-tl');
-s.anims = s.layers.map((L) => L.canvas.animate(frames(L.amp, 'transform'), { timeline, fill: 'both', easing: 'linear' }));
-s.anims.push(s.el.animate(frames(s.neb || 0, 'translate'), { timeline, fill: 'both', easing: 'linear', pseudoElement: '::before' }));
+const id = s.el.dataset.sky || (s.el.dataset.sky = `p${state.indexOf(s)}`);
+s.anims = [];
+s.layers.forEach((L, li) => {
+L.canvas.dataset.sky = `${id}-${li}`;
+setScrollAnim(`${id}-${li}`, `[data-sky="${id}-${li}"]`, 'transform', pts(L.amp, (v) => `translate3d(0,${v}px,0)`));
+s.anims.push(`${id}-${li}`);
+});
+setScrollAnim(`${id}-neb`, `.night-sky[data-sky="${id}"]::before`, 'translate', pts(s.neb || 0, (v) => `0 ${v}px`),
+{ animation: 'nebulaBreath 24s ease-in-out infinite alternate' });
+s.anims.push(`${id}-neb`);
 return true;
 };
 const layout = (s) => {
@@ -452,7 +477,7 @@ if (!w || !h) return;
 const dpr = Math.min(window.devicePixelRatio || 1, SKY.dprMax);
 s.w = w; s.h = h; s.dpr = dpr;
 const rnd = seeded(s.seed);
-const scale = (window.innerHeight + h) / SKY.refRange;
+const scale = (stableVH() + h) / SKY.refRange;
 s.layers.forEach((L) => {
 L.stars = [];
 L.amp = L.base * scale;
@@ -499,7 +524,7 @@ s.layers.forEach((L) => { L.canvas.width = 0; L.canvas.height = 0; });
 };
 const scrollPos = (s) => {
 const r = s.el.getBoundingClientRect();
-const vh = window.innerHeight;
+const vh = stableVH();
 const p = (vh - r.top) / (vh + r.height);
 return 1 - 2 * Math.min(1, Math.max(0, p));
 };
@@ -558,11 +583,11 @@ if (s) layout(s);
 });
 });
 state.forEach((s) => { io.observe(s.el); keep.observe(s.el); ro.observe(s.el); });
-window.addEventListener('resize', () => state.forEach(layout));
+onViewResize(() => state.forEach(layout));
 if (tl) {
 const remeasure = () => state.forEach(measure);
 new ResizeObserver(remeasure).observe(document.body);
-window.addEventListener('resize', remeasure);
+onViewResize(remeasure);
 window.addEventListener('load', remeasure);
 }
 if (!reduceMotion.matches) {
@@ -720,7 +745,7 @@ update();
 const pxImgs = [...document.querySelectorAll('[data-parallax], .page-hero > .page-hero__bg')];
 if (pxImgs.length && !reduceMotion.matches && supportsScrollTl) {
 const measure = () => {
-const vh = window.innerHeight;
+const vh = stableVH();
 pxImgs.forEach((img) => {
 const r = img.parentElement.getBoundingClientRect();
 const top = r.top + window.scrollY;
@@ -736,13 +761,13 @@ img.classList.add('px-tl');
 };
 measure();
 if ('ResizeObserver' in window) new ResizeObserver(() => measure()).observe(document.body);
-window.addEventListener('resize', measure);
+onViewResize(measure);
 window.addEventListener('load', measure);
 } else if (pxImgs.length && !reduceMotion.matches) {
 let raf = 0;
 const update = () => {
 raf = 0;
-const vh = window.innerHeight;
+const vh = stableVH();
 pxImgs.forEach((img) => {
 const frame = img.parentElement;
 const r = frame.getBoundingClientRect();
@@ -798,7 +823,7 @@ const bgRange = () => {
 const secTop = sec.getBoundingClientRect().top + window.scrollY;
 const pinStart = secTop - (parseFloat(getComputedStyle(pin).top) || 0);
 const hold = Math.max(0, sec.offsetHeight - pin.offsetHeight);
-return { from: secTop - window.innerHeight, to: secTop + pin.offsetHeight, pinStart, pinEnd: pinStart + hold, hold };
+return { from: secTop - stableVH(), to: secTop + pin.offsetHeight, pinStart, pinEnd: pinStart + hold, hold };
 };
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 const bgY = (y, r = bgRange()) => {
@@ -807,23 +832,23 @@ if (yy < r.pinStart) return -bgTravel + (bgPinY + bgTravel) * clamp01((yy - r.fr
 if (yy < r.pinEnd) return bgPinY;
 return bgPinY * (1 - clamp01((yy - r.pinEnd) / (r.to + r.hold - r.pinEnd)));
 };
-let bgAnim = null;
+let bgAnim = false;
 let bgKey = '';
+const bgTl = window.CSS && CSS.supports && CSS.supports('animation-timeline: scroll()');
 const setBgAnim = () => {
-if (!bg || !bg.classList.contains('is-pan') || !('ScrollTimeline' in window)) {
-if (bgAnim) { bgAnim.cancel(); bgAnim = null; bgKey = ''; }
+if (!bg || !bg.classList.contains('is-pan') || !bgTl) {
+if (bgAnim) { setScrollAnim('jzbg'); bgAnim = false; bgKey = ''; }
 return;
 }
-const max = document.documentElement.scrollHeight - window.innerHeight;
 const r = bgRange();
-const key = `${Math.round(r.from)} ${Math.round(r.to)} ${Math.round(r.hold)} ${Math.round(max)} ${bgTravel.toFixed(1)} ${bgPinY.toFixed(1)}`;
+const key = `${Math.round(r.from)} ${Math.round(r.to)} ${Math.round(r.hold)} ${bgTravel.toFixed(1)} ${bgPinY.toFixed(1)}`;
 if (key === bgKey) return;
 bgKey = key;
-const ys = [0, r.from, r.pinStart, r.pinEnd, r.to + r.hold, max].map((y) => Math.min(max, Math.max(0, y))).sort((a, b) => a - b)
-.filter((y, i, a) => i === 0 || y > a[i - 1]);
-if (bgAnim) bgAnim.cancel();
-bgAnim = bg.animate(ys.map((y) => ({ offset: max ? y / max : 0, transform: `translate3d(-50%, ${bgY(y, r).toFixed(1)}px, 0)` })),
-{ timeline: new ScrollTimeline({ source: document.documentElement, axis: 'block' }), fill: 'both', easing: 'linear' });
+const ys = [r.from, r.pinStart, r.pinEnd, r.to + r.hold].sort((a, b) => a - b).filter((y, i, a) => i === 0 || y > a[i - 1]);
+bg.dataset.sky = 'jzbg';
+bg.style.transform = '';
+setScrollAnim('jzbg', '.jz-bg[data-sky="jzbg"]', 'transform', ys.map((y) => [y, `translate3d(-50%,${bgY(y, r).toFixed(1)}px,0)`]));
+bgAnim = true;
 };
 const update = () => {
 raf = 0;
