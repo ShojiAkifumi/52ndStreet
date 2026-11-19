@@ -381,7 +381,6 @@ el.style.setProperty('--n2x', `${55 + rnd() * 35}%`);
 el.style.setProperty('--n2y', `${40 + rnd() * 50}%`);
 el.style.setProperty('--n3x', `${30 + rnd() * 50}%`);
 el.style.setProperty('--n3y', `${5 + rnd() * 30}%`);
-el.style.setProperty('--sky-angle', `${95 + rnd() * 50}deg`);
 const old = el.querySelector('canvas');
 const wrap = document.createElement('div');
 wrap.className = 'night-sky__stars';
@@ -580,6 +579,97 @@ if (tick) draw(s, now / 1000);
 };
 requestAnimationFrame(frame);
 }
+}
+const MILKY = {
+w: 1440, h: 900,
+angle: -28,
+width: 0.16,
+core: 0.62,
+stars: 9000,
+};
+const milkySkies = [...document.querySelectorAll('.night-sky:not(.night-sky--plain)')];
+if (milkySkies.length && document.createElement('canvas').getContext) {
+const rnd = seeded(52);
+const G = 64;
+const grid = Array.from({ length: G * G }, () => rnd());
+const vnoise = (x, y) => {
+const xi = Math.floor(x), yi = Math.floor(y);
+const xf = x - xi, yf = y - yi;
+const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+const g = (i, j) => grid[((j % G + G) % G) * G + ((i % G + G) % G)];
+const a = g(xi, yi), b = g(xi + 1, yi), c = g(xi, yi + 1), d = g(xi + 1, yi + 1);
+return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+};
+const fbm = (x, y) => {
+let s = 0, amp = 0.5, f = 1;
+for (let o = 0; o < 5; o++) { s += amp * vnoise(x * f, y * f); f *= 2.1; amp *= 0.5; }
+return s;
+};
+const make = () => {
+const { w, h } = MILKY;
+const rad = (MILKY.angle * Math.PI) / 180;
+const cos = Math.cos(rad), sin = Math.sin(rad);
+const band = (x, y) => {
+const dx = x / w - 0.5, dy = (y - h / 2) / h;
+const along = dx * (w / h) * cos - dy * sin;
+const across = dx * (w / h) * sin + dy * cos;
+return { t: along / (w / h) + 0.5, d: across };
+};
+const sw = 480, sh = 300;
+const small = document.createElement('canvas');
+small.width = sw; small.height = sh;
+const sctx = small.getContext('2d');
+const img = sctx.createImageData(sw, sh);
+for (let y = 0; y < sh; y++) {
+for (let x = 0; x < sw; x++) {
+const { t, d } = band((x / sw) * w, (y / sh) * h);
+const wob = (fbm(t * 6, 3.7) - 0.5) * 0.05;
+const dd = (d - wob) / MILKY.width;
+const glow = Math.exp(-dd * dd * 1.6);
+const coreW = Math.exp(-Math.pow((t - MILKY.core) / 0.18, 2));
+const cloud = fbm(x / 38, y / 38);
+let L = glow * (0.35 + 0.65 * cloud) * (0.55 + 0.75 * coreW);
+const lane = Math.exp(-Math.pow((dd - 0.12 + (fbm(t * 9, 8.1) - 0.5) * 0.5) / 0.32, 2));
+L *= 1 - 0.75 * lane * Math.min(1, fbm(x / 22 + 40, y / 22) * 1.6);
+L = Math.max(0, Math.min(1, L));
+const warm = coreW * glow;
+const r = 150 + 105 * warm, g = 165 + 70 * warm, b = 235 - 35 * warm;
+const i = (y * sw + x) * 4;
+img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
+img.data[i + 3] = Math.round(255 * L * 0.55);
+}
+}
+sctx.putImageData(img, 0, 0);
+const out = document.createElement('canvas');
+out.width = w; out.height = h;
+const ctx = out.getContext('2d');
+ctx.fillStyle = '#000';
+ctx.fillRect(0, 0, w, h);
+ctx.imageSmoothingQuality = 'high';
+ctx.drawImage(small, 0, 0, w, h);
+for (let k = 0; k < MILKY.stars; k++) {
+const x = rnd() * w, y = rnd() * h;
+const { t, d } = band(x, y);
+const dd = d / MILKY.width;
+const p = Math.exp(-dd * dd * 1.2) * (0.5 + 0.5 * Math.exp(-Math.pow((t - MILKY.core) / 0.2, 2)));
+if (rnd() > p) continue;
+const a = 0.15 + rnd() * 0.5;
+const s = rnd() < 0.04 ? 1.4 : 0.7;
+ctx.fillStyle = `rgba(${rnd() < 0.3 ? '255,236,210' : '220,228,255'},${a.toFixed(2)})`;
+ctx.fillRect(x, y, s, s);
+}
+out.toBlob((blob) => {
+if (!blob) return;
+const url = URL.createObjectURL(blob);
+document.documentElement.style.setProperty('--milky', `url("${url}")`);
+}, 'image/jpeg', 0.86);
+};
+milkySkies.forEach((el) => {
+const m = document.createElement('div');
+m.className = 'night-sky__milky';
+el.prepend(m);
+});
+(window.requestIdleCallback || ((f) => setTimeout(f, 200)))(make);
 }
 const drawer = document.getElementById('drawer');
 const openBtn = document.querySelector('.menu-toggle');
