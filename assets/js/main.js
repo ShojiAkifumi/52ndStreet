@@ -14,11 +14,12 @@ fn();
 const saStyle = document.createElement('style');
 document.head.appendChild(saStyle);
 const saRules = new Map();
+let saVer = 0;
 const setScrollAnim = (key, selector, prop, points, extra = null) => {
 if (!points) { saRules.delete(key); saStyle.textContent = [...saRules.values()].join('\n'); return; }
 const y0 = points[0][0], y1 = points[points.length - 1][0];
 const span = y1 - y0 || 1;
-const name = `sa-${key}`;
+const name = `sa-${key}-${++saVer}`;
 const kf = points.map(([y, v]) => `${(((y - y0) / span) * 100).toFixed(4)}%{${prop}:${v}}`).join('');
 const anim = extra ? `${extra.animation}, ${name} linear both` : `${name} linear both`;
 const timeline = extra ? 'auto, scroll(root block)' : 'scroll(root block)';
@@ -658,7 +659,7 @@ const lane = Math.exp(-Math.pow((dd - 0.12 + (fbm(t * 9, 8.1) - 0.5) * 0.5) / 0.
 L *= 1 - 0.75 * lane * Math.min(1, fbm(x / 22 + 40, y / 22) * 1.6);
 L = Math.max(0, Math.min(1, L));
 const warm = coreW * glow;
-const r = 150 + 105 * warm, g = 165 + 70 * warm, b = 235 - 35 * warm;
+const r = 150 + 80 * warm, g = 165 + 55 * warm, b = 235 - 30 * warm;
 const i = (y * sw + x) * 4;
 img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
 img.data[i + 3] = Math.round(255 * L * 0.55);
@@ -668,8 +669,6 @@ sctx.putImageData(img, 0, 0);
 const out = document.createElement('canvas');
 out.width = w; out.height = h;
 const ctx = out.getContext('2d');
-ctx.fillStyle = '#000';
-ctx.fillRect(0, 0, w, h);
 ctx.imageSmoothingQuality = 'high';
 ctx.drawImage(small, 0, 0, w, h);
 for (let k = 0; k < MILKY.stars; k++) {
@@ -687,13 +686,49 @@ out.toBlob((blob) => {
 if (!blob) return;
 const url = URL.createObjectURL(blob);
 document.documentElement.style.setProperty('--milky', `url("${url}")`);
-}, 'image/jpeg', 0.86);
+}, 'image/png');
 };
-milkySkies.forEach((el) => {
+const milkyEls = milkySkies.map((el, i) => {
 const m = document.createElement('div');
 m.className = 'night-sky__milky';
+m.dataset.milky = String(i);
 el.prepend(m);
+return m;
 });
+const milkyTl = window.CSS && CSS.supports && CSS.supports('animation-timeline: scroll()');
+if (milkyTl) {
+document.documentElement.classList.add('milky-tl');
+const keys = new Map();
+const place = () => {
+const vh = stableVH();
+milkyEls.forEach((m, i) => {
+const sky = m.parentElement;
+const top = sky.getBoundingClientRect().top + window.scrollY;
+let base = top, hold = 0, pinStart = Infinity;
+const pinSec = sky.closest('.jz-pin') && sky.closest('[data-hscroll]');
+if (pinSec && pinSec.classList.contains('is-hscroll')) {
+const pin = sky.closest('.jz-pin');
+base = pinSec.getBoundingClientRect().top + window.scrollY;
+hold = pinSec.offsetHeight - pin.offsetHeight;
+pinStart = base - (parseFloat(getComputedStyle(pin).top) || 0);
+}
+const h = sky.offsetHeight;
+const from = base - vh, to = base + h + hold;
+const at = (y) => (y < pinStart ? y : y < pinStart + hold ? pinStart : y - hold) - base;
+const ys = [from, pinStart, pinStart + hold, to].filter((y) => y >= from && y <= to)
+.sort((a, b) => a - b).filter((y, k, a) => k === 0 || y > a[k - 1]);
+const key = `${vh} ${ys.map((y) => Math.round(y)).join(',')}`;
+if (keys.get(i) === key) return;
+keys.set(i, key);
+m.style.height = `${vh}px`;
+setScrollAnim(`milky${i}`, `[data-milky="${i}"]`, 'transform', ys.map((y) => [y, `translate3d(0,${at(y).toFixed(1)}px,0)`]));
+});
+};
+place();
+if ('ResizeObserver' in window) new ResizeObserver(place).observe(document.body);
+onViewResize(place);
+window.addEventListener('load', place);
+}
 (window.requestIdleCallback || ((f) => setTimeout(f, 200)))(make);
 }
 const drawer = document.getElementById('drawer');
