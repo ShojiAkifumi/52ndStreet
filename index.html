@@ -16,6 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&amp;family=Shippori+Mincho:wght@500;700&amp;family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<link rel="preload" href="./assets/images/milkyway.webp" as="image" type="image/webp" fetchpriority="high"><!-- 天の川（夜空の背景）を最優先で読み込む -->
 <link rel="stylesheet" href="./assets/css/style.css">
 <script>
 /* 表示アニメーションの準備：最初の描画より前に .anim を付けて、出てくる前の状態で描く（ちらつき防止）。
@@ -79,7 +80,7 @@ d.classList.add('is-loading');try{if(sessionStorage.getItem('loaderSeen'))d.clas
         <video class="hero__video" muted playsinline preload="none" aria-hidden="true" tabindex="-1"></video>
       </div>
     </div>
-    <div class="night-sky" aria-hidden="true"><canvas></canvas></div>
+    <div class="night-sky has-milky" aria-hidden="true"><div class="night-sky__milky"></div><canvas></canvas></div>
     <h1 class="hero__logo"><img src="./assets/images/logo-white.png" alt="52番街 52nd Street" width="168" height="84"></h1>
     <p class="eyebrow hero__tagline">ダイニングバー 52番街</p>
     <a href="#welcome" class="scroll-ind" aria-label="下へスクロール">Scroll<span class="scroll-line" aria-hidden="true"></span></a>
@@ -95,7 +96,7 @@ d.classList.add('is-loading');try{if(sessionStorage.getItem('loaderSeen'))d.clas
 </section>
 
 <!-- 02 WELCOME -->
-<section class="section section--md has-stars bg-black" id="welcome"><div class="night-sky" aria-hidden="true"><canvas></canvas></div>
+<section class="section section--md has-stars bg-black" id="welcome"><div class="night-sky has-milky" aria-hidden="true"><div class="night-sky__milky"></div><canvas></canvas></div>
   <div class="wrap welcome">
     <div class="welcome__head stack-m">
       <p class="eyebrow">Welcome to 52nd Street</p>
@@ -167,7 +168,7 @@ d.classList.add('is-loading');try{if(sessionStorage.getItem('loaderSeen'))d.clas
 </section>
 
 <!-- 04 CONCEPT -->
-<section class="section section--lg has-stars bg-black" id="concept"><div class="night-sky" aria-hidden="true"><canvas></canvas></div>
+<section class="section section--lg has-stars bg-black" id="concept"><div class="night-sky has-milky" aria-hidden="true"><div class="night-sky__milky"></div><canvas></canvas></div>
   <div class="wrap split split--wide split--center concept">
     <div class="stack-m">
       <p class="eyebrow">Homage to 52nd Street</p>
@@ -233,7 +234,7 @@ d.classList.add('is-loading');try{if(sessionStorage.getItem('loaderSeen'))d.clas
 </section>
 
 <!-- 05 MENU -->
-<section class="section section--lg has-stars bg-black" id="menu"><div class="night-sky" aria-hidden="true"><canvas></canvas></div>
+<section class="section section--lg has-stars bg-black" id="menu"><div class="night-sky has-milky" aria-hidden="true"><div class="night-sky__milky"></div><canvas></canvas></div>
   <div class="wrap stack-xl">
     <div class="stack-s">
       <p class="eyebrow">Wine, Whisky &amp; Plates</p>
@@ -266,7 +267,7 @@ d.classList.add('is-loading');try{if(sessionStorage.getItem('loaderSeen'))d.clas
 </section>
 
 <!-- 08 STORE & SNS -->
-<section class="section section--md has-stars bg-black" id="store"><div class="night-sky" aria-hidden="true"><canvas></canvas></div>
+<section class="section section--md has-stars bg-black" id="store"><div class="night-sky has-milky" aria-hidden="true"><div class="night-sky__milky"></div><canvas></canvas></div>
   <div class="wrap stack-l">
     <div class="sec-head">
       <div class="stack-s">
@@ -351,7 +352,7 @@ d.classList.add('is-loading');try{if(sessionStorage.getItem('loaderSeen'))d.clas
   </div>
 </section>
 </main>
-<footer class="site-footer has-stars"><div class="night-sky" aria-hidden="true"><canvas></canvas></div>
+<footer class="site-footer has-stars"><div class="night-sky has-milky" aria-hidden="true"><div class="night-sky__milky"></div><canvas></canvas></div>
   <div class="wrap site-footer__inner">
     <div class="site-footer__top">
       <div class="site-footer__brand">

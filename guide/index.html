@@ -16,6 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&amp;family=Shippori+Mincho:wght@500;700&amp;family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<link rel="preload" href="../assets/images/milkyway.webp" as="image" type="image/webp" fetchpriority="high"><!-- 天の川（夜空の背景）を最優先で読み込む -->
 <link rel="stylesheet" href="../assets/css/style.css">
 <script>
 /* 下層ページ：ページタイトルの英字（eyebrow）→ h1 の順に一文字ずつ表示。ほかのパーツはフェードインなし（.anim--h1）。
@@ -65,7 +66,7 @@
   </div>
 </section>
 
-<section class="section has-stars" id="week"><div class="night-sky" aria-hidden="true"><canvas></canvas></div>
+<section class="section has-stars" id="week"><div class="night-sky has-milky" aria-hidden="true"><div class="night-sky__milky"></div><canvas></canvas></div>
   <div class="wrap stack-l">
     <div class="stack-s"><p class="eyebrow">Weekly</p><h2 class="h2">週間営業案内</h2></div>
     <table class="week">
@@ -103,7 +104,7 @@
   </div>
 </section>
 
-<section class="section has-stars" id="enter"><div class="night-sky" aria-hidden="true"><canvas></canvas></div>
+<section class="section has-stars" id="enter"><div class="night-sky has-milky" aria-hidden="true"><div class="night-sky__milky"></div><canvas></canvas></div>
   <div class="wrap stack-l">
     <div class="stack-s"><p class="eyebrow">How to Enter</p><h2 class="h2">入店方法</h2></div>
     <ol class="steps steps--box grid grid--260">
@@ -131,7 +132,7 @@
   </div>
 </section>
 
-<section class="section section--md has-stars" id="limit"><div class="night-sky" aria-hidden="true"><canvas></canvas></div>
+<section class="section section--md has-stars" id="limit"><div class="night-sky has-milky" aria-hidden="true"><div class="night-sky__milky"></div><canvas></canvas></div>
   <div class="wrap wrap--narrow stack-m">
     <div class="stack-s"><p class="eyebrow">Admission</p><h2 class="h2">入場制限</h2></div>
     <ul class="lines">
@@ -149,7 +150,7 @@
   </div>
 </section>
 </main>
-<footer class="site-footer has-stars"><div class="night-sky" aria-hidden="true"><canvas></canvas></div>
+<footer class="site-footer has-stars"><div class="night-sky has-milky" aria-hidden="true"><div class="night-sky__milky"></div><canvas></canvas></div>
   <div class="wrap site-footer__inner">
     <div class="site-footer__top">
       <div class="site-footer__brand">

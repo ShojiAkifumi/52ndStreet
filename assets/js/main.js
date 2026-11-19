@@ -356,17 +356,19 @@ density: 1 / 2200,
 maxStars: 650,
 dprMax: 1,
 keepMargin: '600px 0px',
+dropMargin: '1600px 0px',
 periodMin: 5,
 periodMax: 13,
 fps: 24,
+scrollRest: 250,
 glintShare: 0.5,
 glintMin: 4,
 glintMax: 9,
-parallaxNear: 300,
-parallaxFar: 700,
-nebulaShift: 1500,
+parallaxNear: 260,
+parallaxFar: 620,
+nebulaShift: 800,
 refRange: 1100,
-layers: 4,
+layers: 3,
 colors: [[255, 252, 244, 0.62], [232, 214, 168, 0.24], [190, 205, 255, 0.14]],
 };
 const seeded = (seed) => () => {
@@ -516,7 +518,7 @@ s.layers.forEach((L) => {
 L.canvas.width = Math.round(s.w * s.dpr);
 L.canvas.height = Math.round((s.h + 2 * L.amp) * s.dpr);
 });
-draw(s, performance.now() / 1000);
+draw(s, performance.now() / 1000, true);
 };
 const release = (s) => {
 if (!s.alloc) return;
@@ -529,14 +531,30 @@ const vh = stableVH();
 const p = (vh - r.top) / (vh + r.height);
 return 1 - 2 * Math.min(1, Math.max(0, p));
 };
-const draw = (s, t) => {
+const draw = (s, t, full = false) => {
 if (!s.alloc) return;
 const { dpr } = s;
+const vh = stableVH();
+const sky = s.el.getBoundingClientRect();
 s.layers.forEach((L) => {
 const { ctx, amp } = L;
+const H = s.h + 2 * amp;
+let y0 = 0, y1 = H;
+if (!full) {
+const r = L.canvas.getBoundingClientRect();
+y0 = Math.max(0, Math.max(0, sky.top) - r.top - 24);
+y1 = Math.min(H, Math.min(vh, sky.bottom) - r.top + 24);
+if (y1 <= y0) return;
+}
 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-ctx.clearRect(0, 0, s.w, s.h + 2 * amp);
+ctx.save();
+ctx.beginPath();
+ctx.rect(0, y0, s.w, y1 - y0);
+ctx.clip();
+ctx.clearRect(0, y0, s.w, y1 - y0);
 for (const st of L.stars) {
+const sy = st.y + amp;
+if (sy < y0 - 40 || sy > y1 + 40) continue;
 const wave = reduceMotion.matches ? 0.75 : 0.5 + 0.5 * Math.sin((t / st.p) * Math.PI * 2 + st.ph);
 const eased = wave * wave * (3 - 2 * wave);
 const y = st.y + amp;
@@ -554,6 +572,7 @@ ctx.drawImage(sprites[0], st.x - gd / 2, y - gd / 2, gd, gd);
 }
 }
 ctx.globalAlpha = 1;
+ctx.restore();
 });
 };
 const follow = (s) => {
@@ -574,16 +593,22 @@ entries.forEach((en) => {
 const s = state.find((x) => x.el === en.target);
 if (!s) return;
 s.near = en.isIntersecting;
-if (s.near) alloc(s); else release(s);
+if (s.near) alloc(s);
 });
 }, { rootMargin: SKY.keepMargin });
+const drop = new IntersectionObserver((entries) => {
+entries.forEach((en) => {
+const s = state.find((x) => x.el === en.target);
+if (s && !en.isIntersecting) release(s);
+});
+}, { rootMargin: SKY.dropMargin });
 const ro = new ResizeObserver((entries) => {
 entries.forEach((en) => {
 const s = state.find((x) => x.el === en.target);
 if (s) layout(s);
 });
 });
-state.forEach((s) => { io.observe(s.el); keep.observe(s.el); ro.observe(s.el); });
+state.forEach((s) => { io.observe(s.el); keep.observe(s.el); drop.observe(s.el); ro.observe(s.el); });
 onViewResize(() => state.forEach(layout));
 if (tl) {
 const remeasure = () => state.forEach(measure);
@@ -593,9 +618,11 @@ window.addEventListener('load', remeasure);
 }
 if (!reduceMotion.matches) {
 let last = 0;
+let scrolledAt = -1e9;
+window.addEventListener('scroll', () => { scrolledAt = performance.now(); }, { passive: true });
 const frame = (now) => {
 requestAnimationFrame(frame);
-const tick = now - last >= 1000 / SKY.fps;
+const tick = now - last >= 1000 / SKY.fps && now - scrolledAt > SKY.scrollRest;
 if (tick) last = now;
 state.forEach((s) => {
 if (!s.visible || !s.w) return;
@@ -605,131 +632,6 @@ if (tick) draw(s, now / 1000);
 };
 requestAnimationFrame(frame);
 }
-}
-const MILKY = {
-w: 1440, h: 900,
-angle: -28,
-width: 0.16,
-core: 0.62,
-stars: 9000,
-};
-const milkySkies = [...document.querySelectorAll('.night-sky:not(.night-sky--plain)')];
-if (milkySkies.length && document.createElement('canvas').getContext) {
-const rnd = seeded(52);
-const G = 64;
-const grid = Array.from({ length: G * G }, () => rnd());
-const vnoise = (x, y) => {
-const xi = Math.floor(x), yi = Math.floor(y);
-const xf = x - xi, yf = y - yi;
-const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-const g = (i, j) => grid[((j % G + G) % G) * G + ((i % G + G) % G)];
-const a = g(xi, yi), b = g(xi + 1, yi), c = g(xi, yi + 1), d = g(xi + 1, yi + 1);
-return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-};
-const fbm = (x, y) => {
-let s = 0, amp = 0.5, f = 1;
-for (let o = 0; o < 5; o++) { s += amp * vnoise(x * f, y * f); f *= 2.1; amp *= 0.5; }
-return s;
-};
-const make = () => {
-const { w, h } = MILKY;
-const rad = (MILKY.angle * Math.PI) / 180;
-const cos = Math.cos(rad), sin = Math.sin(rad);
-const band = (x, y) => {
-const dx = x / w - 0.5, dy = (y - h / 2) / h;
-const along = dx * (w / h) * cos - dy * sin;
-const across = dx * (w / h) * sin + dy * cos;
-return { t: along / (w / h) + 0.5, d: across };
-};
-const sw = 480, sh = 300;
-const small = document.createElement('canvas');
-small.width = sw; small.height = sh;
-const sctx = small.getContext('2d');
-const img = sctx.createImageData(sw, sh);
-for (let y = 0; y < sh; y++) {
-for (let x = 0; x < sw; x++) {
-const { t, d } = band((x / sw) * w, (y / sh) * h);
-const wob = (fbm(t * 6, 3.7) - 0.5) * 0.05;
-const dd = (d - wob) / MILKY.width;
-const glow = Math.exp(-dd * dd * 1.6);
-const coreW = Math.exp(-Math.pow((t - MILKY.core) / 0.18, 2));
-const cloud = fbm(x / 38, y / 38);
-let L = glow * (0.35 + 0.65 * cloud) * (0.55 + 0.75 * coreW);
-const lane = Math.exp(-Math.pow((dd - 0.12 + (fbm(t * 9, 8.1) - 0.5) * 0.5) / 0.32, 2));
-L *= 1 - 0.75 * lane * Math.min(1, fbm(x / 22 + 40, y / 22) * 1.6);
-L = Math.max(0, Math.min(1, L));
-const warm = coreW * glow;
-const r = 150 + 80 * warm, g = 165 + 55 * warm, b = 235 - 30 * warm;
-const i = (y * sw + x) * 4;
-img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
-img.data[i + 3] = Math.round(255 * L * 0.55);
-}
-}
-sctx.putImageData(img, 0, 0);
-const out = document.createElement('canvas');
-out.width = w; out.height = h;
-const ctx = out.getContext('2d');
-ctx.imageSmoothingQuality = 'high';
-ctx.drawImage(small, 0, 0, w, h);
-for (let k = 0; k < MILKY.stars; k++) {
-const x = rnd() * w, y = rnd() * h;
-const { t, d } = band(x, y);
-const dd = d / MILKY.width;
-const p = Math.exp(-dd * dd * 1.2) * (0.5 + 0.5 * Math.exp(-Math.pow((t - MILKY.core) / 0.2, 2)));
-if (rnd() > p) continue;
-const a = 0.15 + rnd() * 0.5;
-const s = rnd() < 0.04 ? 1.4 : 0.7;
-ctx.fillStyle = `rgba(${rnd() < 0.3 ? '255,236,210' : '220,228,255'},${a.toFixed(2)})`;
-ctx.fillRect(x, y, s, s);
-}
-out.toBlob((blob) => {
-if (!blob) return;
-const url = URL.createObjectURL(blob);
-document.documentElement.style.setProperty('--milky', `url("${url}")`);
-}, 'image/png');
-};
-const milkyEls = milkySkies.map((el, i) => {
-const m = document.createElement('div');
-m.className = 'night-sky__milky';
-m.dataset.milky = String(i);
-el.prepend(m);
-return m;
-});
-const milkyTl = window.CSS && CSS.supports && CSS.supports('animation-timeline: scroll()');
-if (milkyTl) {
-document.documentElement.classList.add('milky-tl');
-const keys = new Map();
-const place = () => {
-const vh = stableVH();
-milkyEls.forEach((m, i) => {
-const sky = m.parentElement;
-const top = sky.getBoundingClientRect().top + window.scrollY;
-let base = top, hold = 0, pinStart = Infinity;
-const pinSec = sky.closest('.jz-pin') && sky.closest('[data-hscroll]');
-if (pinSec && pinSec.classList.contains('is-hscroll')) {
-const pin = sky.closest('.jz-pin');
-base = pinSec.getBoundingClientRect().top + window.scrollY;
-hold = pinSec.offsetHeight - pin.offsetHeight;
-pinStart = base - (parseFloat(getComputedStyle(pin).top) || 0);
-}
-const h = sky.offsetHeight;
-const from = base - vh, to = base + h + hold;
-const at = (y) => (y < pinStart ? y : y < pinStart + hold ? pinStart : y - hold) - base;
-const ys = [from, pinStart, pinStart + hold, to].filter((y) => y >= from && y <= to)
-.sort((a, b) => a - b).filter((y, k, a) => k === 0 || y > a[k - 1]);
-const key = `${vh} ${ys.map((y) => Math.round(y)).join(',')}`;
-if (keys.get(i) === key) return;
-keys.set(i, key);
-m.style.height = `${vh}px`;
-setScrollAnim(`milky${i}`, `[data-milky="${i}"]`, 'transform', ys.map((y) => [y, `translate3d(0,${at(y).toFixed(1)}px,0)`]));
-});
-};
-place();
-if ('ResizeObserver' in window) new ResizeObserver(place).observe(document.body);
-onViewResize(place);
-window.addEventListener('load', place);
-}
-(window.requestIdleCallback || ((f) => setTimeout(f, 200)))(make);
 }
 const drawer = document.getElementById('drawer');
 const openBtn = document.querySelector('.menu-toggle');
@@ -922,6 +824,7 @@ new ResizeObserver(measure).observe(viewport);
 window.addEventListener('resize', measure);
 measure();
 });
+const HERO_PLAY_RATIO = 0.6;
 const HERO_FADE = 1.2;
 const heroMedia = document.querySelector('[data-hero-videos]');
 const saveData = navigator.connection && navigator.connection.saveData;
@@ -998,14 +901,14 @@ cur.classList.add('is-top', 'is-on');
 if (nextIndex < 0) preloadNext();
 }, { once: true });
 new IntersectionObserver((entries) => {
-visible = entries[0].isIntersecting;
+visible = entries[0].intersectionRatio >= HERO_PLAY_RATIO;
 if (visible) {
 play(cur);
 if (switching) play(next);
 } else {
 players.forEach((p) => p.pause());
 }
-}).observe(heroMedia);
+}, { threshold: [0, HERO_PLAY_RATIO] }).observe(heroMedia);
 document.addEventListener('visibilitychange', () => {
 if (document.hidden || !visible) return;
 play(cur);
