@@ -750,6 +750,7 @@ const bar = sec.querySelector('[data-hscroll-bar]');
 if (!pin || !viewport || !track || reduceMotion.matches) return;
 let dist = 0;
 let raf = 0;
+const JZ_IMG_MIN = 90;
 const BG_PIN_TOP = 0.07;
 const BG_PIN_BOTTOM = 0.84;
 const bg = pin.querySelector('.jz-bg');
@@ -823,10 +824,21 @@ bg.style.transform = `translate3d(-50%, ${bgY().toFixed(1)}px, 0)`;
 };
 const measure = () => {
 sec.classList.add('is-hscroll');
+sec.classList.remove('is-fit');
 viewport.scrollLeft = 0;
 dist = track.scrollWidth - viewport.clientWidth;
 const inner = pin.querySelector('.jz-pin__inner');
-const fits = !inner || inner.scrollHeight <= pin.clientHeight + 1;
+let over = inner ? inner.scrollHeight - pin.clientHeight : 0;
+if (dist > 0 && over > 1) {
+const img = track.querySelector('.jz-card__img img');
+const want = img ? Math.floor(img.offsetHeight - over - 2) : 0;
+if (want >= JZ_IMG_MIN) {
+sec.style.setProperty('--jz-img-max', `${want}px`);
+sec.classList.add('is-fit');
+over = inner.scrollHeight - pin.clientHeight;
+}
+}
+const fits = over <= 1;
 if (dist <= 0 || !fits) {
 sec.classList.remove('is-hscroll');
 sec.style.height = '';
