@@ -644,29 +644,43 @@ requestAnimationFrame(frame);
 }
 const drawer = document.getElementById('drawer');
 const openBtn = document.querySelector('.menu-toggle');
-const closeBtn = drawer && drawer.querySelector('.menu-close');
-if (drawer && openBtn && closeBtn) {
+const backdrop = document.querySelector('.drawer-backdrop');
+if (drawer && openBtn && backdrop) {
 let hideTimer = 0;
 const setOpen = (open) => {
 clearTimeout(hideTimer);
 openBtn.setAttribute('aria-expanded', String(open));
+openBtn.setAttribute('aria-label', open ? 'メニューを閉じる' : 'メニューを開く');
 document.body.classList.toggle('is-drawer-open', open);
 if (open) {
-drawer.hidden = false;
+drawer.hidden = backdrop.hidden = false;
 void drawer.offsetWidth;
 drawer.classList.add('is-open');
-closeBtn.focus({ preventScroll: true });
+backdrop.classList.add('is-open');
 } else {
 drawer.classList.remove('is-open');
+backdrop.classList.remove('is-open');
 const ms = reduceMotion.matches ? 0 : parseFloat(getComputedStyle(drawer).transitionDuration) * 1000 || 0;
-hideTimer = setTimeout(() => { drawer.hidden = true; }, ms);
-openBtn.focus({ preventScroll: true });
+hideTimer = setTimeout(() => { drawer.hidden = backdrop.hidden = true; }, ms);
 }
 };
-openBtn.addEventListener('click', () => setOpen(true));
-closeBtn.addEventListener('click', () => setOpen(false));
+openBtn.addEventListener('click', () => setOpen(drawer.hidden || !drawer.classList.contains('is-open')));
+backdrop.addEventListener('click', () => setOpen(false));
 drawer.addEventListener('click', (e) => {
-if (e.target.closest('a')) setOpen(false);
+const a = e.target.closest('a[href]');
+if (!a) return;
+const to = new URL(a.href, location.href);
+const samePage = to.origin === location.origin && to.pathname === location.pathname && to.search === location.search;
+if (samePage || e.defaultPrevented || a.target === '_blank' || e.ctrlKey || e.metaKey || e.shiftKey) setOpen(false);
+});
+window.addEventListener('pageshow', (e) => {
+if (!e.persisted || drawer.hidden) return;
+const els = [drawer, ...openBtn.children];
+els.forEach((el) => { el.style.transition = 'none'; });
+setOpen(false);
+drawer.hidden = backdrop.hidden = true;
+void drawer.offsetWidth;
+els.forEach((el) => { el.style.transition = ''; });
 });
 document.addEventListener('keydown', (e) => {
 if (e.key === 'Escape' && !drawer.hidden) setOpen(false);
